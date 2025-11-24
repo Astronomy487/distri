@@ -1,0 +1,6 @@
+fn_params_layout = "Compressed"
+hard_tabs = true
+trailing_comma = "Never"
+match_block_trailing_comma = false
+normalize_comments = true
+brace_style = "PreferSameLine"

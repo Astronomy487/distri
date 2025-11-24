@@ -1,0 +1,25 @@
+[package]
+name = "distri"
+version = "0.1.0"
+edition = "2024"
+readme = "README.md"
+
+[dependencies]
+cached = "0.56.0"
+id3 = "1.16.3"
+image = { version = "0.25", default-features = false, features = ["png", "jpeg"] }
+metaflac = "0.2.8"
+regex = "1.12.2"
+serde_json = "1.0"
+unicode-normalization = "0.1.25"
+zip = { version = "0.6", default-features = false, features = ["deflate"] }
+
+[profile.release]
+opt-level = "z"
+lto = "fat"
+codegen-units = 1
+panic = "abort"
+strip = true
+incremental = false
+debug = false
+rpath = false
