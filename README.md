@@ -8,7 +8,8 @@ distri is a music management suite I am making to handle all my music. Because I
 
 - [X] Read source/discog.json into data structures
 - [X] Encode songs
+- [X] Give the mp3s and flacs nice metadata
 - [X] Zip into nice album things
-- [ ] Generate the website for me
-
-- [ ] Don't use explicit filepaths :P like some global variable to point to the filezone
+- [X] Generate the website for me
+- [X] Put everything in audio.astronomy487.com directory organized so I can easily sync with R2 bucket
+- [ ] rss.xml

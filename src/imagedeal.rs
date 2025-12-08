@@ -1,12 +1,16 @@
+use crate::globals;
+
 #[cached::proc_macro::cached(size = 100)]
 pub fn grab_image(name: String) -> Vec<u8> {
-	let img_path = std::path::Path::new("C:/Users/astro/Code/distri/filezone/source/image")
+	let img_path = std::path::Path::new(globals::FILEZONE)
+		.join("source")
+		.join("image")
 		.join(&name)
 		.with_extension("png");
-	let dest_path =
-		std::path::Path::new("C:/Users/astro/Code/distri/filezone/music.astronomy487.com")
-			.join(&name)
-			.with_extension("jpg");
+	let dest_path = std::path::Path::new(globals::FILEZONE)
+		.join("music.astronomy487.com")
+		.join(&name)
+		.with_extension("jpg");
 	if !dest_path.exists() {
 		let img = image::ImageReader::open(&img_path)
 			.expect(&format!("The png image {} didn't exist", name))
