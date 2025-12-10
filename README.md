@@ -12,4 +12,5 @@ distri is a music management suite I am making to handle all my music. Because I
 - [X] Zip into nice album things
 - [X] Generate the website for me
 - [X] Put everything in audio.astronomy487.com directory organized so I can easily sync with R2 bucket
-- [ ] rss.xml
+- [X] rss.xml
+- [ ] Rework the `do_encode` logic to only find `parent_album: Option<Album>` as it needs to, in conjunction with a match on `self.parent_album: (usize, usize)`. I cannot keep using asserts like this This is not idiomatic of me

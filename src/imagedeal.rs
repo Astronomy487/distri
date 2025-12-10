@@ -13,7 +13,7 @@ pub fn grab_image(name: String) -> Vec<u8> {
 		.with_extension("jpg");
 	if !dest_path.exists() {
 		let img = image::ImageReader::open(&img_path)
-			.expect(&format!("The png image {} didn't exist", name))
+			.unwrap_or_else(|_| panic!("The png image {} didn't exist", &name))
 			.decode()
 			.expect("We couldn't decode");
 		let resized_img = img.resize(1000, 1000, image::imageops::FilterType::Gaussian);
