@@ -5,19 +5,18 @@ edition = "2024"
 readme = "README.md"
 
 [dependencies]
-symphonia = { version = "0.5", default-features = false, features = ["wav", "flac"] }
-cached = "0.56.0"
-id3 = "1.16.3"
+symphonia = { version = "0.5", default-features = false, features = ["flac"] }
+id3 = { version = "1.16.3", default-features = false }
 image = { version = "0.25", default-features = false, features = ["png", "jpeg"] }
-itertools = "0.14.0"
-maud = "0.27.0"
-metaflac = "0.2.8"
-regex = "1.12.2"
-serde_json = "1.0"
-unicode-normalization = "0.1.25"
+itertools = { version = "0.14.0", default-features = false }
+maud = { version = "0.27.0", default-features = false }
+metaflac = { version = "0.2.8", default-features = false }
+regex = { version = "1.12.2", default-features = false, features = ["unicode-perl"] }
+serde_json = { version = "1.0", default-features = false, features = ["std"] }
+unicode-normalization = { version = "0.1.25", default-features = false }
 zip = { version = "0.6", default-features = false, features = ["deflate"] }
-quick-xml = "0.38.4"
-xml-macro = "0.3.0"
+sha2 = { version = "0.10.9", default-features = false }
+rayon = { version = "1.11.0", default-features = false }
 
 [profile.release]
 opt-level = "z"

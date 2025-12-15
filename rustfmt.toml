@@ -3,3 +3,4 @@ hard_tabs = true
 trailing_comma = "Never"
 match_block_trailing_comma = false
 normalize_comments = true
+newline_style = "Native"

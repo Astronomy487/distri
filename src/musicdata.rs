@@ -1,133 +1,12 @@
+use crate::color;
+use crate::date;
+use crate::fileops;
 use crate::globals;
 use crate::imagedeal;
-use crate::zipper;
+use crate::lyric;
+use crate::url;
 
-pub struct Date {
-	year: u32,
-	month: u32, // 1 = january
-	day: u32
-}
-impl Date {
-	fn from(yyyy_mm_dd: &str) -> Date {
-		fn bad(yyyy_mm_dd: &str) -> ! {
-			panic!("Date must be in YYYY-MM-DD format: \"{}\"", yyyy_mm_dd);
-		}
-		if yyyy_mm_dd.len() != 10 {
-			bad(yyyy_mm_dd);
-		}
-		let year = yyyy_mm_dd[0..4].parse().unwrap_or_else(|_| bad(yyyy_mm_dd));
-		let month = yyyy_mm_dd[5..7].parse().unwrap_or_else(|_| bad(yyyy_mm_dd));
-		let day = yyyy_mm_dd[8..10]
-			.parse()
-			.unwrap_or_else(|_| bad(yyyy_mm_dd));
-		if !(1..=12).contains(&month) {
-			bad(yyyy_mm_dd);
-		}
-		Date { year, month, day }
-	}
-	pub fn weekday_name(&self) -> &'static str {
-		const LEADING_VALUES: [u32; 12] = [0, 3, 2, 5, 0, 3, 5, 1, 4, 6, 2, 4];
-		let year = if (self.month as i32) < 3 {
-			self.year - 1
-		} else {
-			self.year
-		};
-		match (year + year / 4 - year / 100
-			+ year / 400
-			+ LEADING_VALUES[(self.month - 1) as usize]
-			+ self.day)
-			% 7
-		{
-			0 => "Sun",
-			1 => "Mon",
-			2 => "Tue",
-			3 => "Wed",
-			4 => "Thu",
-			5 => "Fri",
-			6 => "Sat",
-			_ => unreachable!()
-		}
-	}
-	pub fn to_rfc822(&self) -> String {
-		format!(
-			"{}, {:02} {} {} 17:00:00 GMT",
-			self.weekday_name(),
-			self.day,
-			match self.month {
-				1 => "Jan",
-				2 => "Feb",
-				3 => "Mar",
-				4 => "Apr",
-				5 => "May",
-				6 => "Jun",
-				7 => "Jul",
-				8 => "Aug",
-				9 => "Sep",
-				10 => "Oct",
-				11 => "Nov",
-				12 => "Dec",
-				_ => unreachable!()
-			},
-			self.year
-		)
-	}
-
-	pub fn now_rfc822() -> String {
-		let now = std::time::SystemTime::now()
-			.duration_since(std::time::UNIX_EPOCH)
-			.unwrap_or_else(|_| std::time::Duration::from_secs(0))
-			.as_secs();
-		let secs = now % 60;
-		let mins = (now / 60) % 60;
-		let hours = (now / 3600) % 24;
-		let days = now / 86400;
-		let weekday = (4 + days % 7) % 7;
-		let weekday_name = match weekday {
-			0 => "Sun",
-			1 => "Mon",
-			2 => "Tue",
-			3 => "Wed",
-			4 => "Thu",
-			5 => "Fri",
-			6 => "Sat",
-			_ => unreachable!()
-		};
-		let z_value = days as i64 + 719468;
-		let era = (if z_value >= 0 {
-			z_value
-		} else {
-			z_value - 146096
-		}) / 146097;
-		let doe = z_value - era * 146097;
-		let yoe = (doe - doe / 1460 + doe / 36524 - doe / 146096) / 365;
-		let year = yoe + era * 400;
-		let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
-		let mp = (5 * doy + 2) / 153;
-		let date = doy - (153 * mp + 2) / 5 + 1;
-		let month = mp + if mp < 10 { 3 } else { -9 };
-		let year = year + (month <= 2) as i64;
-		let month_name = match month {
-			1 => "Jan",
-			2 => "Feb",
-			3 => "Mar",
-			4 => "Apr",
-			5 => "May",
-			6 => "Jun",
-			7 => "Jul",
-			8 => "Aug",
-			9 => "Sep",
-			10 => "Oct",
-			11 => "Nov",
-			12 => "Dec",
-			_ => unreachable!()
-		};
-		format!(
-			"{}, {:02} {} {} {:02}:{:02}:{:02} GMT",
-			weekday_name, date, month_name, year, hours, mins, secs
-		)
-	}
-}
-fn format_duration(seconds: u32) -> String {
+pub fn format_duration(seconds: u32) -> String {
 	let minutes = (seconds / 60) % 60;
 	let hours = (seconds / 3600) % 60;
 	let seconds = seconds % 60;
@@ -138,505 +17,10 @@ fn format_duration(seconds: u32) -> String {
 	if minutes > 0 {
 		parts.push(format!("{}m", minutes));
 	}
-	if seconds > 0 {
+	if seconds > 0 || parts.is_empty() {
 		parts.push(format!("{}s", seconds));
 	}
 	parts.join(" ")
-}
-pub fn format_file_size(bytes: u64) -> String {
-	const KB: f64 = 1024.0;
-	const MB: f64 = 1024.0 * 1024.0;
-	const GB: f64 = 1024.0 * 1024.0 * 1024.0;
-	let bytes = bytes as f64;
-	fn sig3(amount: f64) -> String {
-		if amount >= 100.0 {
-			format!("{:.0}", amount)
-		} else if amount >= 10.0 {
-			format!("{:.1}", amount)
-		} else {
-			format!("{:.2}", amount)
-		}
-	}
-	if bytes >= GB {
-		format!("{} GB", sig3(bytes / GB))
-	} else if bytes >= MB {
-		format!("{} MB", sig3(bytes / MB))
-	} else if bytes >= KB {
-		format!("{} kB", sig3(bytes / KB))
-	} else {
-		format!("{:.0} B", bytes)
-	}
-}
-impl std::fmt::Display for Date {
-	fn fmt(&self, fmt: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		write!(
-			fmt,
-			"{} {}, {}",
-			match self.month {
-				1 => "Jan",
-				2 => "Feb",
-				3 => "Mar",
-				4 => "Apr",
-				5 => "May",
-				6 => "Jun",
-				7 => "Jul",
-				8 => "Aug",
-				9 => "Sep",
-				10 => "Oct",
-				11 => "Nov",
-				12 => "Dec",
-				_ => unreachable!()
-			},
-			self.day,
-			self.year
-		)
-	}
-}
-
-struct UrlSet {
-	spotify: Option<String>,
-	apple_music: Option<String>,
-	youtube_video: Option<String>,
-	youtube_playlist: Option<String>,
-	youtube_full_mix: Option<String>,
-	bandcamp: Option<String>,
-	amazon_music: Option<String>,
-	iheartradio: Option<String>,
-	soundcloud: Option<String>,
-	tencent_music: Option<String>
-}
-impl UrlSet {
-	fn from(val: &serde_json::Value, is_album: bool) -> UrlSet {
-		let obj = val.as_object().expect("\"url\" from JSON is not an object");
-		let allowed = [
-			"Spotify",
-			"Apple Music",
-			"YouTube",
-			"YouTube Full Mix",
-			"Bandcamp",
-			"Amazon Music",
-			"iHeartRadio",
-			"Soundcloud",
-			"Tencent Music"
-		];
-		for key in obj.keys() {
-			if !allowed.contains(&key.as_str()) {
-				panic!("\"url\" object from JSON has unknown key \"{}\"", key);
-			}
-		}
-		UrlSet {
-			spotify: obj.get("Spotify").map(|v| {
-				v.as_str()
-					.expect("\"url\" attribute \"Spotify\" from JSON is not a string")
-					.to_string()
-			}),
-			apple_music: obj.get("Apple Music").map(|v| {
-				v.as_str()
-					.expect("\"url\" attribute \"Apple Music\" from JSON is not a string")
-					.to_string()
-			}),
-			youtube_video: if !is_album {
-				obj.get("YouTube").map(|v| {
-					v.as_str()
-						.expect("\"url\" attribute \"YouTube\" from JSON is not a string")
-						.to_string()
-				})
-			} else {
-				None
-			},
-			youtube_playlist: if is_album {
-				obj.get("YouTube").map(|v| {
-					v.as_str()
-						.expect("\"url\" attribute \"YouTube\" from JSON is not a string")
-						.to_string()
-				})
-			} else {
-				None
-			},
-			youtube_full_mix: obj.get("YouTube Full Mix").map(|v| {
-				v.as_str()
-					.expect("\"url\" attribute \"YouTube Full Mix\" from JSON is not a string")
-					.to_string()
-			}),
-			bandcamp: obj.get("Bandcamp").map(|v| {
-				v.as_str()
-					.expect("\"url\" attribute \"Bandcamp\" from JSON is not a string")
-					.to_string()
-			}),
-			amazon_music: obj.get("Amazon Music").map(|v| {
-				v.as_str()
-					.expect("\"url\" attribute \"Amazon Music\" from JSON is not a string")
-					.to_string()
-			}),
-			iheartradio: obj.get("iHeartRadio").map(|v| {
-				v.as_str()
-					.expect("\"url\" attribute \"iHeartRadio\" from JSON is not a string")
-					.to_string()
-			}),
-			soundcloud: obj.get("Soundcloud").map(|v| {
-				v.as_str()
-					.expect("\"url\" attribute \"Soundcloud\" from JSON is not a string")
-					.to_string()
-			}),
-			tencent_music: obj.get("Tencent Music").map(|v| {
-				v.as_str()
-					.expect("\"url\" attribute \"Tencent Music\" from JSON is not a string")
-					.to_string()
-			})
-		}
-	}
-	fn iter(&self) -> Vec<(&'static str, &String)> {
-		let mut vec = Vec::new();
-		if let Some(x) = &self.bandcamp {
-			vec.push(("Bandcamp", x));
-		}
-		if let Some(x) = &self.youtube_video {
-			vec.push(("YouTube", x));
-		}
-		if let Some(x) = &self.youtube_playlist {
-			vec.push(("YouTube", x));
-		}
-		if let Some(x) = &self.youtube_full_mix {
-			vec.push(("YouTube Full Mix", x));
-		}
-		if let Some(x) = &self.apple_music {
-			vec.push(("Apple Music", x));
-		}
-		if let Some(x) = &self.spotify {
-			vec.push(("Spotify", x));
-		}
-		if let Some(x) = &self.soundcloud {
-			vec.push(("Soundcloud", x));
-		}
-		if let Some(x) = &self.amazon_music {
-			vec.push(("Amazon Music", x));
-		}
-		if let Some(x) = &self.iheartradio {
-			vec.push(("iHeartRadio", x));
-		}
-		if let Some(x) = &self.tencent_music {
-			vec.push(("Tencent Music", x));
-		}
-		vec
-	}
-	fn combine<'a>(a: Option<&'a UrlSet>, b: Option<&'a UrlSet>) -> UrlSet {
-		let a_video = a.and_then(|x| x.youtube_video.as_ref());
-		let a_playlist = a.and_then(|x| x.youtube_playlist.as_ref());
-		UrlSet {
-			spotify: a
-				.and_then(|x| x.spotify.as_ref().cloned())
-				.or_else(|| b.and_then(|x| x.spotify.as_ref().cloned())),
-			apple_music: a
-				.and_then(|x| x.apple_music.as_ref().cloned())
-				.or_else(|| b.and_then(|x| x.apple_music.as_ref().cloned())),
-			youtube_video: a
-				.and_then(|x| x.youtube_video.as_ref().cloned())
-				.or_else(|| {
-					if a_playlist.is_some() {
-						None
-					} else {
-						b.and_then(|x| x.youtube_video.as_ref().cloned())
-					}
-				}),
-			youtube_playlist: a
-				.and_then(|x| x.youtube_playlist.as_ref().cloned())
-				.or_else(|| {
-					if a_video.is_some() {
-						None
-					} else {
-						b.and_then(|x| x.youtube_playlist.as_ref().cloned())
-					}
-				}),
-			youtube_full_mix: a
-				.and_then(|x| x.youtube_full_mix.as_ref().cloned())
-				.or_else(|| b.and_then(|x| x.youtube_full_mix.as_ref().cloned())),
-			bandcamp: a
-				.and_then(|x| x.bandcamp.as_ref().cloned())
-				.or_else(|| b.and_then(|x| x.bandcamp.as_ref().cloned())),
-			amazon_music: a
-				.and_then(|x| x.amazon_music.as_ref().cloned())
-				.or_else(|| b.and_then(|x| x.amazon_music.as_ref().cloned())),
-			iheartradio: a
-				.and_then(|x| x.iheartradio.as_ref().cloned())
-				.or_else(|| b.and_then(|x| x.iheartradio.as_ref().cloned())),
-			soundcloud: a
-				.and_then(|x| x.soundcloud.as_ref().cloned())
-				.or_else(|| b.and_then(|x| x.soundcloud.as_ref().cloned())),
-			tencent_music: a
-				.and_then(|x| x.tencent_music.as_ref().cloned())
-				.or_else(|| b.and_then(|x| x.tencent_music.as_ref().cloned()))
-		}
-	}
-}
-
-struct Color(u8, u8, u8);
-impl Color {
-	fn from(s: &str) -> Color {
-		if !s.starts_with('#') {
-			panic!("Invalid color string \"{}\" from JSON", s);
-		}
-		if s.len() != 7 {
-			panic!("Invalid color string \"{}\" from JSON", s);
-		}
-		let r = u8::from_str_radix(&s[1..3], 16)
-			.unwrap_or_else(|_| panic!("Invalid color string \"{}\" from JSON", s));
-		let g = u8::from_str_radix(&s[3..5], 16)
-			.unwrap_or_else(|_| panic!("Invalid color string \"{}\" from JSON", s));
-		let b = u8::from_str_radix(&s[5..7], 16)
-			.unwrap_or_else(|_| panic!("Invalid color string \"{}\" from JSON", s));
-		Color(r, g, b)
-	}
-}
-impl std::fmt::Display for Color {
-	fn fmt(&self, fmt: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		write!(fmt, "#{:02x}{:02x}{:02x}", self.0, self.1, self.2)
-	}
-}
-enum PaletteMode {
-	Normal,
-	White,
-	Black
-}
-struct Palette {
-	palette_mode: PaletteMode,
-	foreground: Color,
-	background: Color,
-	accent: Color
-}
-impl Palette {
-	fn style_tag(&self) -> String {
-		format!(
-			":root{{--bg:{};--fg:{};--acc:{}}}",
-			self.background, self.foreground, self.accent
-		)
-	}
-	fn from(v: &serde_json::Value) -> Palette {
-		let obj = v
-			.as_object()
-			.unwrap_or_else(|| panic!("\"color\" from JSON is not an object: {}", v));
-		let fg_val = obj
-			.get("fg")
-			.unwrap_or_else(|| panic!("\"color\" from JSON has no \"fg\" attribute: {}", v));
-		let fg_str = fg_val
-			.as_str()
-			.unwrap_or_else(|| panic!("\"fg\" (\"color\") from JSON is not a string: {}", fg_val));
-		let bg_val = obj
-			.get("bg")
-			.unwrap_or_else(|| panic!("\"color\" from JSON has no \"bg\" attribute: {}", v));
-		let bg_str = bg_val
-			.as_str()
-			.unwrap_or_else(|| panic!("\"bg\" (\"color\") from JSON is not a string: {}", bg_val));
-		let acc_val = obj
-			.get("acc")
-			.unwrap_or_else(|| panic!("\"color\" from JSON has no \"acc\" attribute: {}", v));
-		let acc_str = acc_val.as_str().unwrap_or_else(|| {
-			panic!("\"acc\" (\"color\") from JSON is not a string: {}", acc_val)
-		});
-		let palette_mode = match obj.get("mode") {
-			None => PaletteMode::Normal,
-			Some(mode_val) => {
-				let mode_str = mode_val.as_str().unwrap_or_else(|| {
-					panic!(
-						"\"mode\" (\"color\") from JSON is not a string: {}",
-						mode_val
-					)
-				});
-				match mode_str {
-					"white" => PaletteMode::White,
-					"black" => PaletteMode::Black,
-					other => panic!(
-						"\"mode\" (\"color\") from JSON is an invalid string: {}",
-						other
-					)
-				}
-			}
-		};
-		Palette {
-			foreground: Color::from(fg_str),
-			background: Color::from(bg_str),
-			accent: Color::from(acc_str),
-			palette_mode
-		}
-	}
-}
-
-#[derive(Copy, Clone)]
-enum Language {
-	English,
-	Japanese,
-	French,
-	Latin
-}
-impl Language {
-	fn iso_639_2(&self) -> &'static str {
-		match self {
-			Language::English => "eng",
-			Language::Japanese => "jpn",
-			Language::French => "fra",
-			Language::Latin => "lat"
-		}
-	}
-	fn iso_639_1(&self) -> &'static str {
-		match self {
-			Language::English => "en",
-			Language::Japanese => "ja",
-			Language::French => "fr",
-			Language::Latin => "la"
-		}
-	}
-	fn from(s: &str) -> Language {
-		match s {
-			"en" => Language::English,
-			"eng" => Language::English,
-			"ja" => Language::Japanese,
-			"jpn" => Language::Japanese,
-			"fr" => Language::French,
-			"fra" => Language::French,
-			"la" => Language::Latin,
-			"lat" => Language::Latin,
-			_ => {
-				panic!("Unrecognized ISO 639 language code \"{}\"", s);
-			}
-		}
-	}
-}
-#[derive(Clone)]
-struct LyricLine {
-	start: f32,
-	end: f32,
-	text: String,
-	language: Language,
-	vocalist: String
-}
-impl LyricLine {
-	fn from(text: &str) -> Vec<Vec<LyricLine>> {
-		let mut last_lang: Option<Language> = None;
-		let mut last_vocalist: Option<String> = None;
-		let vvll: Vec<Vec<LyricLine>> = text
-			.split("\n\n")
-			.map(|stanza| {
-				stanza
-					.lines()
-					.filter_map(|line| {
-						if line.is_empty() {
-							return None;
-						}
-						let parts: Vec<&str> = line.split('\t').collect();
-						if parts.len() < 3 {
-							panic!("Invalid lyric line \"{}\"", line);
-						}
-						let start = parts[0].parse::<f32>().ok()?;
-						let end = parts[1].parse::<f32>().ok()?;
-						let text = parts[2].to_string();
-
-						let mut lang_override: Option<Language> = None;
-						let mut vocalist_override: Option<String> = None;
-
-						for kv in &parts[3..] {
-							if let Some((key, value)) = kv.split_once(":") {
-								match key {
-									"language" => lang_override = Some(Language::from(value)),
-									"vocalist" => vocalist_override = Some(value.to_string()),
-									_ => panic!("Invalid lyric tag \"{}\"", key)
-								}
-							}
-						}
-						let language = if let Some(lang) = lang_override {
-							last_lang = Some(lang);
-							lang
-						} else if let Some(lang) = last_lang {
-							lang
-						} else {
-							panic!("First lyric line (\"{}\") has no language tag", line);
-						};
-						let vocalist = if let Some(v) = vocalist_override {
-							last_vocalist = Some(v.clone());
-							v
-						} else if let Some(v) = &last_vocalist {
-							v.clone()
-						} else {
-							panic!("First lyric line (\"{}\") has no vocalist tag", line);
-						};
-						Some(LyricLine {
-							start,
-							end,
-							text,
-							language,
-							vocalist
-						})
-					})
-					.collect()
-			})
-			.collect();
-		for vll in &vvll {
-			if vll.is_empty() {
-				panic!("Stanza has no lines. Lyric text:\n```\n{}\n```", text);
-			}
-		}
-		if vvll.is_empty() {
-			panic!("Stanza has no lines. Lyric text:\n```\n{}\n```", text);
-		}
-		vvll
-	}
-	fn as_plaintext(lyrics: &[Vec<LyricLine>]) -> String {
-		lyrics
-			.iter()
-			.map(|stanza| {
-				stanza
-					.iter()
-					.map(|line| line.to_unsynced())
-					.collect::<Vec<_>>()
-					.join("\n")
-			})
-			.collect::<Vec<_>>()
-			.join("\n\n")
-	}
-	fn as_lrc(lyrics: &[Vec<LyricLine>]) -> String {
-		// TODO - why do empty lines still have a timestamp? .join("\n\n") is not doing its job
-		lyrics
-			.iter()
-			.map(|stanza| {
-				let stanza_lines: Vec<String> =
-					stanza.iter().map(|line| line.to_synced_text()).collect();
-				stanza_lines.join("\n")
-			})
-			.collect::<Vec<_>>()
-			.join("\n\n")
-	}
-	fn as_sylt_data(lyrics: &Vec<Vec<LyricLine>>) -> Vec<(u32, String)> {
-		let mut synced_content: Vec<(u32, String)> = Vec::new();
-		for stanza in lyrics {
-			for line in stanza {
-				synced_content.push(line.to_synced_pair());
-			}
-			if let Some(last_line) = stanza.last() {
-				synced_content.push((last_line.end_ms(), String::new()));
-			}
-		}
-		synced_content
-	}
-	fn start_ms(&self) -> u32 {
-		(self.start * 1000.0).round() as u32
-	}
-	fn end_ms(&self) -> u32 {
-		(self.end * 1000.0).round() as u32
-	}
-	fn to_unsynced(&self) -> String {
-		self.text.clone()
-	}
-	fn to_synced_pair(&self) -> (u32, String) {
-		(self.start_ms(), self.text.clone())
-	}
-	fn to_synced_text(&self) -> String {
-		let total_ms = self.start_ms();
-		let minutes = total_ms / 60000;
-		let seconds = (total_ms % 60000) / 1000;
-		let hundredths = (total_ms % 1000) / 10; // two‑digit fraction
-		format!(
-			"[{:02}:{:02}.{:02}] {}",
-			minutes, seconds, hundredths, self.text
-		)
-	}
 }
 
 enum Codec {
@@ -662,8 +46,6 @@ impl Codec {
 				"320k".into(),
 				"-map_metadata".into(),
 				"-1".into(),
-				"-loglevel".into(),
-				"panic".into(),
 				output.into(),
 			],
 			Codec::Flac => vec![
@@ -676,8 +58,6 @@ impl Codec {
 				"8".into(),
 				"-map_metadata".into(),
 				"-1".into(),
-				"-loglevel".into(),
-				"panic".into(),
 				output.into(),
 			]
 		}
@@ -688,30 +68,31 @@ pub struct Album {
 	pub songs: Vec<Song>,
 	title: String,
 	artist: String,
-	pub released: Date,
+	pub released: date::Date,
 	length: u32,
 	pub temporary: bool,
 	upc: Option<String>,
 	bcid: Option<String>,
 	pub about: Option<String>,
-	palette: Option<Palette>,
+	palette: Option<color::Palette>,
 	single: bool,
-	url: UrlSet
+	compilation: bool,
+	url: url::UrlSet
 }
 
 pub struct Song {
-	parent_album: Option<(usize, usize)>, /* album-index, position in tracklist. todo rename to parent_album_indeces or something */
+	parent_album_indices: Option<(usize, usize)>, // album-index, position in tracklist
 	title: String,
 	artist: String,
-	released: Option<Date>,
+	released: Option<date::Date>,
 	pub bonus: bool,
 	event: bool,
 	single_artwork: Option<String>,
 	length: u32,
 	isrc: Option<String>,
-	lyrics: Option<Vec<Vec<LyricLine>>>,
-	palette: Option<Palette>,
-	url: Option<UrlSet>,
+	lyrics: Option<lyric::Lyrics>,
+	palette: Option<color::Palette>,
+	url: Option<url::UrlSet>,
 	samples: Option<Vec<String>>, // report as "Mix tracklist" if event
 	about: Option<String>
 }
@@ -727,7 +108,7 @@ impl Titlable<'_> {
 			Titlable::Album(album) => &album.artist
 		}
 	}
-	fn palette(&self) -> &Option<Palette> {
+	fn palette(&self) -> &Option<color::Palette> {
 		match self {
 			Titlable::Song(song, maybe_parent_album) => {
 				if song.palette.is_some() {
@@ -776,12 +157,12 @@ impl Titlable<'_> {
 	}
 	fn audio_download_local_location(&self, codec: &Codec) -> std::path::PathBuf {
 		match self {
-			Titlable::Song(song, _) => std::path::Path::new(globals::FILEZONE)
+			Titlable::Song(song, _) => std::path::Path::new(globals::filezone())
 				.join("audio.astronomy487.com")
 				.join(codec.ext())
 				.join(song.slug())
 				.with_extension(codec.ext()),
-			Titlable::Album(album) => std::path::Path::new(globals::FILEZONE)
+			Titlable::Album(album) => std::path::Path::new(globals::filezone())
 				.join("audio.astronomy487.com")
 				.join(codec.ext())
 				.join(album.slug())
@@ -835,7 +216,7 @@ impl Titlable<'_> {
 		slug
 	}
 	pub fn make_link_page(&self) {
-		let destination_folder = std::path::Path::new(globals::FILEZONE)
+		let destination_folder = std::path::Path::new(globals::filezone())
 			.join("music.astronomy487.com")
 			.join(self.slug());
 		if destination_folder.exists() {
@@ -855,7 +236,7 @@ impl Titlable<'_> {
 			let mut file = std::fs::File::create(&lyrics_txt_location).unwrap_or_else(|_| {
 				panic!("Couldn't create file {}", lyrics_txt_location.display())
 			});
-			let _ = std::io::Write::write(&mut file, LyricLine::as_plaintext(lxs).as_bytes())
+			let _ = std::io::Write::write(&mut file, lyric::Lyrics::as_plaintext(lxs).as_bytes())
 				.unwrap_or_else(|_| {
 					panic!("Couldn't write to file {}", lyrics_txt_location.display())
 				});
@@ -863,7 +244,7 @@ impl Titlable<'_> {
 			let mut file = std::fs::File::create(&lyrics_lrc_location).unwrap_or_else(|_| {
 				panic!("Couldn't create file {}", lyrics_lrc_location.display())
 			});
-			let _ = std::io::Write::write(&mut file, LyricLine::as_lrc(lxs).as_bytes())
+			let _ = std::io::Write::write(&mut file, lyric::Lyrics::as_lrc(lxs).as_bytes())
 				.unwrap_or_else(|_| {
 					panic!("Couldn't write to file {}", lyrics_lrc_location.display())
 				});
@@ -883,7 +264,7 @@ impl Titlable<'_> {
 					&album.released
 				} else {
 					panic!(
-						"Song {} has no release date and no parent album",
+						"Song {} has no release date::Date and no parent album",
 						song.slug()
 					)
 				};
@@ -909,7 +290,9 @@ impl Titlable<'_> {
 		let palette = self.palette();
 		let url_set = match self {
 			Titlable::Album(a) => &a.url,
-			Titlable::Song(s, parent) => &UrlSet::combine(s.url.as_ref(), parent.map(|a| &a.url))
+			Titlable::Song(s, parent) => {
+				&url::UrlSet::combine(s.url.as_ref(), parent.map(|a| &a.url))
+			}
 		};
 
 		let thing_to_offer_as_download = match self {
@@ -938,7 +321,7 @@ impl Titlable<'_> {
 					title { (title) }
 					@if let Some(p) = palette {
 						style { (p.style_tag()) }
-						meta name="theme-color" content=(p.background.to_string());
+						meta name="theme-color" content=(p.html_theme_color());
 					}
 					meta name="description" content=(description);
 					meta name="keywords" content="electronic, dance, music, astro, artist, indie, edm";
@@ -990,11 +373,7 @@ impl Titlable<'_> {
 					@match palette {
 						None => "",
 						Some(palette) => {
-							@match palette.palette_mode {
-								PaletteMode::Normal => "",
-								PaletteMode::White => "mode-white",
-								PaletteMode::Black => "mode-black"
-							}
+							( palette.palette_mode_as_css_class_name() )
 						}
 					}
 				} {
@@ -1050,7 +429,7 @@ impl Titlable<'_> {
 											" zip"
 										}
 										", "
-										(format_file_size(mp3_size))
+										(fileops::format_file_size(mp3_size))
 									}
 								}
 								td {
@@ -1060,7 +439,7 @@ impl Titlable<'_> {
 											" zip"
 										}
 										", "
-										(format_file_size(flac_size))
+										(fileops::format_file_size(flac_size))
 									}
 								}
 							}
@@ -1071,24 +450,15 @@ impl Titlable<'_> {
 									td {
 										span data-talktalk="lyrics" { "Lyrics" }
 									}
-									td {
-										a href="lyrics.txt" download=(&format!("{}-lyrics.txt", song.slug())) {
-											"txt, "
-											(format_file_size( //TODO this is messy. in general
-												std::fs::metadata(std::path::Path::new(globals::FILEZONE).join("music.astronomy487.com").join(song.slug()).join("lyrics").with_extension("txt")).unwrap_or_else(|_|
-													panic!("lyrics.txt does not exist for {}", song)
-												).len()
-											))
-										}
-									}
-									td {
-										a href="lyrics.lrc" download=(&format!("{}-lyrics.lrc", song.slug())) {
-											"lrc, "
-											(format_file_size( //TODO this is messy. in general
-												std::fs::metadata(std::path::Path::new(globals::FILEZONE).join("music.astronomy487.com").join(song.slug()).join("lyrics").with_extension("lrc")).unwrap_or_else(|_|
-													panic!("lyrics.lrc does not exist for {}", song)
-												).len()
-											))
+									@for format in ["txt", "lrc"] {
+										td {
+											a href=("lyrics.".to_owned() + format) download=(&format!("{}-lyrics.{}", song.slug(), format)) {
+												(format)
+												", "
+												(fileops::format_file_size(fileops::filesize(
+													&std::path::Path::new(globals::filezone()).join("music.astronomy487.com").join(song.slug()).join("lyrics").with_extension(format)
+												)))
+											}
 										}
 									}
 								}
@@ -1125,7 +495,10 @@ impl Titlable<'_> {
 					.map(|d| d.to_string())
 					.or_else(|| parent_opt.map(|parent| parent.released.to_string()))
 					.unwrap_or_else(|| {
-						panic!("Song {} has no release date or parent album", song.slug())
+						panic!(
+							"Song {} has no release date::Date or parent album",
+							song.slug()
+						)
 					});
 				let length = format_duration(song.length);
 				match parent_opt {
@@ -1141,7 +514,7 @@ impl Titlable<'_> {
 					Some(parent) => match parent.single {
 						false => {
 							let track_number = song
-								.parent_album
+								.parent_album_indices
 								.expect("Titlable has parent album but also doesn't")
 								.1 + 1;
 							format!(
@@ -1185,9 +558,28 @@ impl Album {
 		Titlable::Album(self).slug()
 	}
 	fn from_json(val: &serde_json::Value) -> Album {
+		let obj = globals::map_with_only_these_keys(
+			val,
+			"Album",
+			&[
+				"about",
+				"bcid",
+				"color",
+				"length",
+				"released",
+				"songs",
+				"title",
+				"upc",
+				"url",
+				"compilation",
+				"artist",
+				"single",
+				"temporary"
+			]
+		);
 		Album {
 			songs: {
-				let songs_val = val
+				let songs_val = obj
 					.get("songs")
 					.unwrap_or_else(|| panic!("Album JSON {} has no attribute \"songs\"", val));
 
@@ -1200,7 +592,7 @@ impl Album {
 
 				songs_arr.iter().map(Song::from_json).collect()
 			},
-			artist: match val.get("artist") {
+			artist: match obj.get("artist") {
 				None => "Astro".to_string(),
 				Some(artist_val) => artist_val
 					.as_str()
@@ -1213,7 +605,7 @@ impl Album {
 					.to_string()
 			},
 			title: {
-				let title_val = val
+				let title_val = obj
 					.get("title")
 					.unwrap_or_else(|| panic!("Album JSON {} has no attribute \"title\"", val));
 
@@ -1228,7 +620,7 @@ impl Album {
 					.to_string()
 			},
 			released: {
-				let rel_val = val
+				let rel_val = obj
 					.get("released")
 					.unwrap_or_else(|| panic!("Album JSON {} has no attribute \"released\"", val));
 				let rel_str = rel_val.as_str().unwrap_or_else(|| {
@@ -1237,10 +629,10 @@ impl Album {
 						rel_val
 					)
 				});
-				Date::from(rel_str)
+				date::Date::from(rel_str)
 			},
 			length: {
-				let len_val = val
+				let len_val = obj
 					.get("length")
 					.unwrap_or_else(|| panic!("Album JSON {} has no attribute \"length\"", val));
 				len_val.as_i64().unwrap_or_else(|| {
@@ -1250,46 +642,55 @@ impl Album {
 					)
 				}) as u32
 			},
-			temporary: match val.get("temporary") {
+			temporary: match obj.get("temporary") {
 				None => false,
 				Some(v) => v.as_bool().unwrap_or_else(|| {
 					panic!("Album JSON attribute \"temporary\" is not a boolean: {}", v)
 				})
 			},
-			single: match val.get("single") {
+			single: match obj.get("single") {
 				None => false,
 				Some(v) => v.as_bool().unwrap_or_else(|| {
 					panic!("Album JSON attribute \"single\" is not a boolean: {}", v)
 				})
 			},
-			upc: val.get("upc").map(|v| {
+			compilation: match obj.get("compilation") {
+				None => false,
+				Some(v) => v.as_bool().unwrap_or_else(|| {
+					panic!(
+						"Album JSON attribute \"compilation\" is not a boolean: {}",
+						v
+					)
+				})
+			},
+			upc: obj.get("upc").map(|v| {
 				v.as_str()
 					.unwrap_or_else(|| {
 						panic!("Album JSON attribute \"upc\" is not a string: {}", v)
 					})
 					.to_owned()
 			}),
-			bcid: val.get("bcid").map(|v| {
+			bcid: obj.get("bcid").map(|v| {
 				v.as_str()
 					.unwrap_or_else(|| {
 						panic!("Album JSON attribute \"bcid\" is not a string: {}", v)
 					})
 					.to_owned()
 			}),
-			about: val.get("about").map(|v| {
+			about: obj.get("about").map(|v| {
 				v.as_str()
 					.unwrap_or_else(|| {
 						panic!("Album JSON attribute \"about\" is not a string: {}", v)
 					})
 					.to_owned()
 			}),
-			palette: val.get("color").map(Palette::from),
+			palette: obj.get("color").map(color::Palette::from),
 			url: {
-				let url_val = val
+				let url_val = obj
 					.get("url")
 					.unwrap_or_else(|| panic!("Album JSON {} has no attribute \"url\"", val));
 
-				UrlSet::from(url_val, true)
+				url::UrlSet::from(url_val, true)
 			}
 		}
 	}
@@ -1303,7 +704,7 @@ impl Album {
 		}
 	}
 	fn zip(&self, codec: &Codec) {
-		let destination = std::path::Path::new(globals::FILEZONE)
+		let destination = std::path::Path::new(globals::filezone())
 			.join("audio.astronomy487.com")
 			.join(codec.ext())
 			.join(self.slug())
@@ -1311,20 +712,19 @@ impl Album {
 		if destination.exists() {
 			return;
 		}
-		println!(
-			"{}Zipping    {:4}{}   {}",
-			globals::ANSI_MAGENTA,
+		globals::log_3(
+			"Zipping",
 			codec.ext(),
-			globals::ANSI_RESET,
-			self
+			self,
+			globals::ANSI_MAGENTA
 		);
-		let mut zipper = zipper::Zipper::new(&destination);
+		let mut zipper = fileops::Zipper::new(&destination);
 		for (song_index, song) in self.songs.iter().enumerate() {
-			println!(
-				"           {}+{}      {}",
-				globals::ANSI_MAGENTA,
-				globals::ANSI_RESET,
-				song
+			globals::log_3(
+				"",
+				format!("+ {}", song_index + 1),
+				song,
+				globals::ANSI_MAGENTA
 			);
 			zipper.add_file(
 				&song.destination_location(codec),
@@ -1338,7 +738,7 @@ impl Album {
 			);
 			if let Some(lyrics) = &song.lyrics {
 				zipper.add_text_file(
-					&LyricLine::as_plaintext(lyrics),
+					&lyric::Lyrics::as_plaintext(lyrics),
 					std::path::Path::new(&format!(
 						"lyrics/txt/{:03}-{}.txt",
 						song_index,
@@ -1346,7 +746,7 @@ impl Album {
 					))
 				);
 				zipper.add_text_file(
-					&LyricLine::as_lrc(lyrics),
+					&lyric::Lyrics::as_lrc(lyrics),
 					std::path::Path::new(&format!(
 						"lyrics/lrc/{:03}-{}.lrc",
 						song_index,
@@ -1357,7 +757,7 @@ impl Album {
 		}
 		zipper.add_text_file(&self.description(), std::path::Path::new("about.txt"));
 		zipper.add_file(
-			&std::path::Path::new(globals::FILEZONE)
+			&std::path::Path::new(globals::filezone())
 				.join("source")
 				.join("image")
 				.join(self.slug())
@@ -1427,9 +827,17 @@ impl Song {
 		Titlable::Song(self, None).slug()
 	}
 	fn from_json(val: &serde_json::Value) -> Song {
+		let obj = globals::map_with_only_these_keys(
+			val,
+			"Song",
+			&[
+				"artist", "title", "released", "bonus", "event", "length", "isrc", "lyrics",
+				"color", "url", "samples", "about", "artwork"
+			]
+		);
 		let mut song = Song {
-			parent_album: None,
-			artist: match val.get("artist") {
+			parent_album_indices: None,
+			artist: match obj.get("artist") {
 				None => "Astro".to_string(),
 				Some(v) => v
 					.as_str()
@@ -1439,7 +847,7 @@ impl Song {
 					.to_string()
 			},
 			title: {
-				let t = val
+				let t = obj
 					.get("title")
 					.unwrap_or_else(|| panic!("Song JSON {} has no attribute \"title\"", val));
 				t.as_str()
@@ -1448,19 +856,19 @@ impl Song {
 					})
 					.to_string()
 			},
-			released: val.get("released").map(|v| {
+			released: obj.get("released").map(|v| {
 				let s = v.as_str().unwrap_or_else(|| {
 					panic!("Song JSON attribute \"released\" is not a string: {}", v)
 				});
-				Date::from(s)
+				date::Date::from(s)
 			}),
-			bonus: match val.get("bonus") {
+			bonus: match obj.get("bonus") {
 				None => false,
 				Some(v) => v.as_bool().unwrap_or_else(|| {
 					panic!("Song JSON attribute \"bonus\" is not a boolean: {}", v)
 				})
 			},
-			event: match val.get("event") {
+			event: match obj.get("event") {
 				None => false,
 				Some(v) => v.as_bool().unwrap_or_else(|| {
 					panic!("Song JSON attribute \"event\" is not a boolean: {}", v)
@@ -1468,7 +876,7 @@ impl Song {
 			},
 			single_artwork: None, // single_artwork determined right after construction
 			length: {
-				let l = val
+				let l = obj
 					.get("length")
 					.unwrap_or_else(|| panic!("Song JSON {} has no attribute \"length\"", val));
 
@@ -1476,22 +884,22 @@ impl Song {
 					panic!("Song JSON attribute \"length\" is not an integer: {}", l)
 				}) as u32
 			},
-			isrc: val.get("isrc").map(|v| {
+			isrc: obj.get("isrc").map(|v| {
 				v.as_str()
 					.unwrap_or_else(|| {
 						panic!("Song JSON attribute \"isrc\" is not a string: {}", v)
 					})
 					.to_owned()
 			}),
-			lyrics: val.get("lyrics").map(|v| {
+			lyrics: obj.get("lyrics").map(|v| {
 				let s = v.as_str().unwrap_or_else(|| {
 					panic!("Song JSON attribute \"lyrics\" is not a string: {}", v)
 				});
-				LyricLine::from(s)
+				lyric::Lyrics::from(s)
 			}),
-			palette: val.get("color").map(Palette::from),
-			url: val.get("url").map(|v| UrlSet::from(v, false)),
-			samples: val.get("samples").map(|v| {
+			palette: obj.get("color").map(color::Palette::from),
+			url: obj.get("url").map(|v| url::UrlSet::from(v, false)),
+			samples: obj.get("samples").map(|v| {
 				let arr = v.as_array().unwrap_or_else(|| {
 					panic!("Song JSON attribute \"samples\" is not an array: {}", v)
 				});
@@ -1505,7 +913,7 @@ impl Song {
 					})
 					.collect()
 			}),
-			about: val.get("about").map(|v| {
+			about: obj.get("about").map(|v| {
 				v.as_str()
 					.unwrap_or_else(|| {
 						panic!("Song JSON attribute \"about\" is not a string: {}", v)
@@ -1515,10 +923,18 @@ impl Song {
 		};
 
 		// artwork handling
-		match val.get("artwork") {
+		match obj.get("artwork") {
 			None => {}
 			Some(v) => match v {
 				serde_json::Value::String(s) => {
+					if !s.chars().all(|c| matches!(c, 'a'..='z' | '0'..='9' | '-')) {
+						panic!(
+							"Invalid artwork name \"{}\": must contain only lowercase alphanumeric and hyphens",
+							s
+						);
+					}
+					song.single_artwork = Some(s.to_string());
+
 					song.single_artwork = Some(s.to_string());
 				}
 				serde_json::Value::Bool(_) => {
@@ -1535,7 +951,7 @@ impl Song {
 	}
 
 	fn destination_location(&self, codec: &Codec) -> std::path::PathBuf {
-		std::path::Path::new(globals::FILEZONE)
+		std::path::Path::new(globals::filezone())
 			.join(if self.bonus {
 				"private"
 			} else {
@@ -1546,12 +962,12 @@ impl Song {
 			.with_extension(codec.ext())
 	}
 	fn do_encode(&self, codec: &Codec, all_albums: &[Album]) {
-		let input_file_name = match self.parent_album {
+		let input_file_name = match self.parent_album_indices {
 			// input_file_name includes album directory where we expect it
 			Some((album_index, _)) => all_albums[album_index].slug() + "/" + &self.slug(),
 			None => self.slug()
 		} + ".flac";
-		let input_file = std::path::Path::new(globals::FILEZONE)
+		let input_file = std::path::Path::new(globals::filezone())
 			.join("source")
 			.join("audio")
 			.join(&input_file_name);
@@ -1559,35 +975,41 @@ impl Song {
 			panic!("Could not find audio source {}", input_file_name)
 		}
 		let destination = self.destination_location(codec);
-		if !destination.exists() {
-			let args = codec.ffmpeg_args(
-				input_file.to_str().unwrap_or_else(|| {
-					panic!(
-						"FFmpeg input file {} could not be made into a string",
-						input_file.display()
-					)
-				}),
-				destination.to_str().unwrap_or_else(|| {
-					panic!(
-						"FFmpeg output file {} could not be made into a string",
-						destination.display()
-					)
-				})
-			);
-			println!(
-				"{}Encoding   {:4}{}   {}",
-				globals::ANSI_YELLOW,
-				codec.ext(),
-				globals::ANSI_RESET,
-				self
-			);
-			let ffmpeg_status = std::process::Command::new("ffmpeg").args(&args).status();
-			if !matches!(ffmpeg_status, std::result::Result::Ok(s) if s.success()) {
-				panic!("FFmpeg encoding failed");
-			}
-		} else {
-			// return;
-			// TODO ^^^ if runtime is ever too much from re re re re rewriting metadata, return early here
+		if destination.exists() {
+			// We don't need to encode it again :)
+			// Or even rewrite any of its metadata!
+			return;
+		}
+
+		let args = codec.ffmpeg_args(
+			input_file.to_str().unwrap_or_else(|| {
+				panic!(
+					"FFmpeg input file {} could not be made into a string",
+					input_file.display()
+				)
+			}),
+			destination.to_str().unwrap_or_else(|| {
+				panic!(
+					"FFmpeg output file {} could not be made into a string",
+					destination.display()
+				)
+			})
+		);
+		globals::log_3(
+			"Encoding",
+			codec.ext(),
+			self,
+			globals::ANSI_YELLOW
+		);
+		let output = std::process::Command::new("ffmpeg.exe")
+			.args(&args)
+			.stdout(std::process::Stdio::null())
+			.stderr(std::process::Stdio::null())
+			.output()
+			.expect("Failed to run ffmpeg");
+		if !output.status.success() {
+			let stderr = String::from_utf8_lossy(&output.stderr);
+			panic!("FFmpeg encoding failed:\n{}", stderr);
 		}
 
 		let f = std::fs::File::open(&input_file).expect("Suddenly the input file doesn't exist");
@@ -1623,8 +1045,22 @@ impl Song {
 			self.length,
 			dur
 		);
+		let params = &track.codec_params;
+		let sr = params.sample_rate.expect("Symphonia couldn't identify sample rate");
+		assert!(
+			sr >= 44_100,
+			"Expected 44.1 kHz (or higher), but file has {} Hz",
+			sr
+		);
+		let bit_depth = params.bits_per_sample.expect("Symphonia couldn't identify bit depth");
+		assert!(
+			bit_depth >= 16,
+			"Expected 16-bit audio (or higher), but file is {}-bit",
+			bit_depth
+		);
+		
 		// woaf is for a public-facing song page; woas is for parent album if it exists, else the song
-		let (woaf_string, woas_string) = match (self.bonus, self.parent_album) {
+		let (woaf_string, woas_string) = match (self.bonus, self.parent_album_indices) {
 			(true, None) => {
 				panic!("Bonus track {} has no parent album", self)
 			}
@@ -1639,7 +1075,7 @@ impl Song {
 				let mut tag = id3::Tag::new();
 				id3::TagLike::set_title(&mut tag, &self.title);
 				id3::TagLike::set_artist(&mut tag, &self.artist);
-				match self.parent_album {
+				match self.parent_album_indices {
 					Some((album_index, song_index)) => {
 						let parent_album = &all_albums[album_index];
 						id3::TagLike::set_album(&mut tag, &parent_album.title);
@@ -1691,7 +1127,7 @@ impl Song {
 					id3::frame::Frame::text("TENC", globals::ENCODER)
 				);
 				let _ = id3::TagLike::add_frame(&mut tag, id3::frame::Frame::text("TFLT", "mp3"));
-				if let Some((album_index, _)) = self.parent_album {
+				if let Some((album_index, _)) = self.parent_album_indices {
 					let _ = id3::TagLike::add_frame(
 						&mut tag,
 						id3::frame::Frame::text(
@@ -1701,20 +1137,13 @@ impl Song {
 					);
 				}
 				if let Some(lyrics) = &self.lyrics {
-					let first_lang = lyrics[0][0].language;
-					let lang_code = first_lang.iso_639_2().to_string();
-					let mut all_lines = Vec::new();
-					for stanza in lyrics {
-						let mut collected: Vec<LyricLine> = Vec::new();
-						for line in stanza {
-							collected.push(line.clone());
-						}
-						all_lines.push(collected);
-					}
+					let lang_code = lyric::Lyrics::most_common_language(lyrics)
+						.iso_639_2()
+						.to_string();
 					let uslt = id3::frame::Lyrics {
 						lang: lang_code.clone(),
 						description: "".to_string(),
-						text: LyricLine::as_plaintext(&all_lines)
+						text: lyric::Lyrics::as_plaintext(lyrics)
 					};
 					let _ = id3::TagLike::add_frame(&mut tag, uslt);
 					let sylt = id3::frame::Frame::with_content(
@@ -1724,7 +1153,7 @@ impl Song {
 							timestamp_format: id3::frame::TimestampFormat::Ms,
 							content_type: id3::frame::SynchronisedLyricsType::Other,
 							description: "".to_string(),
-							content: LyricLine::as_sylt_data(&all_lines)
+							content: lyric::Lyrics::as_sylt_data(lyrics)
 						})
 					);
 					let _ = id3::TagLike::add_frame(&mut tag, sylt);
@@ -1745,7 +1174,7 @@ impl Song {
 				});
 				tag.set_vorbis("TITLE", vec![&self.title]);
 				tag.set_vorbis("ARTIST", vec![&self.artist]);
-				match self.parent_album {
+				match self.parent_album_indices {
 					Some((album_index, song_index)) => {
 						let parent_album = &all_albums[album_index];
 						tag.set_vorbis("ALBUM", vec![&parent_album.title]);
@@ -1764,7 +1193,7 @@ impl Song {
 				tag.set_vorbis("LENGTH", vec![self.length.to_string()]);
 				let release_date = self.release_date(all_albums);
 				tag.set_vorbis(
-					"DATE",
+					"date::Date",
 					vec![format!(
 						"{:04}-{:02}-{:02}",
 						release_date.year, release_date.month, release_date.day
@@ -1794,15 +1223,15 @@ impl Song {
 				}
 				tag.set_vorbis("ENCODER", vec![globals::ENCODER]);
 				tag.set_vorbis("FILETYPE", vec!["flac"]);
-				if let Some((album_index, _)) = self.parent_album {
+				if let Some((album_index, _)) = self.parent_album_indices {
 					tag.set_vorbis(
 						"COPYRIGHT",
 						vec![all_albums[album_index].copyright_message()]
 					);
 				}
 				if let Some(lyrics) = &self.lyrics {
-					tag.set_vorbis("LYRICS", vec![&LyricLine::as_plaintext(lyrics)]);
-					tag.set_vorbis("LYRICS_SYNCED", vec![&LyricLine::as_lrc(lyrics)]);
+					tag.set_vorbis("LYRICS", vec![&lyric::Lyrics::as_plaintext(lyrics)]);
+					tag.set_vorbis("LYRICS_SYNCED", vec![&lyric::Lyrics::as_lrc(lyrics)]);
 				}
 				if tag.save().is_err() {
 					panic!("Couldn't write flac metadata for {}", self);
@@ -1810,10 +1239,10 @@ impl Song {
 			}
 		}
 	}
-	fn release_date<'a>(&'a self, all_albums: &'a [Album]) -> &'a Date {
+	fn release_date<'a>(&'a self, all_albums: &'a [Album]) -> &'a date::Date {
 		match &self.released {
 			Some(date) => date,
-			None => match self.parent_album {
+			None => match self.parent_album_indices {
 				Some((album_index, _)) => &all_albums[album_index].released,
 				None => {
 					panic!("Song {} without parent album must have release date", self);
@@ -1824,7 +1253,7 @@ impl Song {
 	fn grab_artwork(&self, all_albums: &[Album]) -> Vec<u8> {
 		imagedeal::grab_image(match &self.single_artwork {
 			Some(artwork) => artwork.to_string(),
-			None => match self.parent_album {
+			None => match self.parent_album_indices {
 				Some((album_index, _)) => all_albums[album_index].slug(),
 				None => "fallback".to_string()
 			}
@@ -1842,6 +1271,7 @@ pub fn get_music_data(json_path: &std::path::Path) -> (Vec<Album>, Vec<Song>) {
 	let reader = std::io::BufReader::new(file);
 	let json_value: serde_json::Value = serde_json::from_reader(reader)
 		.unwrap_or_else(|error| panic!("discog.json is invalid JSON: {}", error));
+	globals::log_3("Parsing", "", "Discography JSON", globals::ANSI_CYAN);
 	let remixes: Vec<Song> = json_value
 		.get("remixes")
 		.expect("discog.json has no attribute \"remixes\"")
@@ -1862,14 +1292,14 @@ pub fn get_music_data(json_path: &std::path::Path) -> (Vec<Album>, Vec<Song>) {
 	// assign parent_album refs
 	for (album_index, album) in albums.iter_mut().enumerate() {
 		for (song_index, song) in album.songs.iter_mut().enumerate() {
-			song.parent_album = Some((album_index, song_index));
+			song.parent_album_indices = Some((album_index, song_index));
 		}
 	}
 
 	// validation
 	for remix in &remixes {
 		if remix.released.is_none() {
-			panic!("Remix {} must have a release date", remix);
+			panic!("Remix {} must have a release date::Date", remix);
 		}
 		if remix.event && remix.lyrics.is_some() {
 			panic!("Remix {} (marked as an event) must not have lyrics", remix);
@@ -1921,14 +1351,30 @@ pub fn get_music_data(json_path: &std::path::Path) -> (Vec<Album>, Vec<Song>) {
 			if song.event {
 				panic!("Album track {} must not be marked as an event", song);
 			}
-			if song.bonus && song.url.is_some() {
-				panic!("Bonus track {} must not have a URL set", song);
-			}
 			if !song.bonus && song.url.is_none() {
 				panic!("Non-bonus track {} must have a URL set", song);
 			}
 		}
 		assert!(!album.songs[0].bonus);
+		for window in album.songs.windows(2) {
+			if window[0].bonus && !window[1].bonus {
+				panic!(
+					"Bonus track {} is followed by non-bonus track {}",
+					window[0], window[1]
+				);
+			}
+		}
+	}
+
+	// Check that all album artwork is where it needs to be
+	for album in &albums {
+		let _ = imagedeal::grab_image(album.slug());
+		for song in &album.songs {
+			let _ = song.grab_artwork(&albums);
+		}
+	}
+	for remix in &remixes {
+		let _ = remix.grab_artwork(&albums);
 	}
 
 	(albums, remixes)

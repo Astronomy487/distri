@@ -1,3 +1,4 @@
+use crate::date;
 use crate::globals;
 use crate::musicdata;
 
@@ -92,7 +93,7 @@ pub fn make_rss(albums: &[musicdata::Album]) {
 		.with_child(
 			XmlNode::new("description").with_text("All albums released by Astro (astronomy487)")
 		)
-		.with_child(XmlNode::new("lastBuildDate").with_text(musicdata::Date::now_rfc822()))
+		.with_child(XmlNode::new("lastBuildDate").with_text(date::Date::now_rfc822()))
 		.with_child(XmlNode::new("category").with_text("music"))
 		.with_child(XmlNode::new("language").with_text("en-US"))
 		.with_child(XmlNode::new("docs").with_text("https://www.rssboard.org/rss-specification"))
@@ -135,7 +136,13 @@ pub fn make_rss(albums: &[musicdata::Album]) {
 							"url",
 							format!("https://music.astronomy487.com/{}.jpg", album.slug())
 						)
-						// .with_attribute("length", "TODO")
+						.with_attribute("length", {
+							let path = std::path::Path::new(globals::filezone())
+								.join("music.astronomy487.com")
+								.join(album.slug())
+								.with_extension("jpg");
+							format!("{}", crate::fileops::filesize(&path))
+						})
 						.with_attribute("type", "image/jpeg")
 				)
 				.with_child(XmlNode::new("pubDate").with_text(album.released.to_rfc822()));
@@ -152,7 +159,7 @@ pub fn make_rss(albums: &[musicdata::Album]) {
 		.with_child(channel);
 
 	let mut f = std::fs::File::create(
-		std::path::Path::new(globals::FILEZONE)
+		std::path::Path::new(globals::filezone())
 			.join("music.astronomy487.com")
 			.join("rss")
 			.with_extension("xml")
