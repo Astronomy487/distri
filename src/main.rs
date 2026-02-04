@@ -1,59 +1,106 @@
-#![deny(non_snake_case)]
-#![deny(non_camel_case_types)]
-#![deny(non_upper_case_globals)]
-#![deny(unused_mut)]
-#![deny(unreachable_code)]
-#![deny(unreachable_patterns)]
-#![deny(unused_results)]
-#![deny(unused_unsafe)]
+#![deny(non_snake_case, non_camel_case_types, non_upper_case_globals)]
+#![warn(unused_mut, unused_results, unused_variables, unused_imports)]
+#![deny(unsafe_code, unused_unsafe)]
+#![deny(unreachable_code, unreachable_patterns)]
 #![allow(dead_code)]
-#![deny(unused_variables)]
-#![deny(unused_imports)]
 #![deny(private_interfaces)]
 #![deny(absolute_paths_not_starting_with_crate)]
 #![deny(clippy::unwrap_used)]
-#![deny(unsafe_code)]
+#![deny(clippy::many_single_char_names)]
+#![deny(clippy::shadow_reuse, clippy::shadow_same, clippy::shadow_unrelated)]
+#![deny(clippy::cast_lossless)]
+#![warn(clippy::manual_assert)]
+#![allow(clippy::too_many_lines)]
+#![allow(clippy::needless_range_loop)]
 
 mod color;
+mod css;
 mod date;
 mod fileops;
+mod genre;
 mod globals;
+mod homepage;
+mod icons;
 mod imagedeal;
 mod language;
+mod linkpage;
 mod lyric;
 mod musicdata;
 mod rclone;
 mod rss;
+mod smartquotes;
 mod url;
 mod wrangle;
+mod xml;
 
 fn main() {
 	set_panic_hook();
 	check_if_can_run();
-	
-	let mut args = std::env::args().skip(1);
-	match args.next().as_deref() {
-		Some("validate") => distri_encode(false, false),
-		Some("encode") => distri_encode(true, false),
-		Some("build") => distri_encode(false, true),
-		Some("publish") => distri_publish(),
-		Some("clean") => distri_clean(),
-		Some("logo") => globals::print_logo(),
-		_ => distri_help()
-	}
 
-	std::process::exit(0);
+	let args: Vec<String> = std::env::args().skip(1).collect();
+	if args.is_empty() {
+		distri_help();
+		return;
+	}
+	let allowed = ["logo", "publish", "validate", "encode", "build", "clean"];
+	if args.iter().any(|a| !allowed.contains(&a.as_str())) {
+		distri_help();
+		return;
+	}
+	let only = |s: &str| args.len() == 1 && args[0] == s;
+	if only("clean") {
+		distri_clean();
+	} else if only("publish") {
+		distri_publish();
+	} else {
+		let encode = args.contains(&"encode".into());
+		let build = args.contains(&"build".into());
+		let valid = args.contains(&"validate".into());
+		if encode || build || valid {
+			distri_encode(encode, build);
+		} else {
+			distri_help();
+		}
+	}
 }
 fn distri_encode(build_r2_bucket: bool, build_static_website: bool) {
-	let (all_albums, all_remixes) = musicdata::get_music_data(
-		&std::path::Path::new(globals::filezone())
-			.join("source")
-			.join("discog")
-			.with_extension("json")
-	);
+	let just_validating = !build_r2_bucket && !build_static_website;
+
+	let json_location = std::path::Path::new(globals::filezone())
+		.join("source")
+		.join("discog")
+		.with_extension("json");
+
+	let (all_albums, all_remixes, all_assists) = musicdata::get_music_data(&json_location);
+
+	// Check that all album artwork is where it needs to be
+	globals::log_2("Locating", "Artwork", globals::ANSI_GREEN);
+	if !just_validating {
+		for album in &all_albums {
+			let _ = imagedeal::grab_artwork_data(album.slug.clone(), imagedeal::ImageCodec::Jpg);
+			let _ = imagedeal::grab_artwork_data(album.slug.clone(), imagedeal::ImageCodec::Png);
+			for song in &album.songs {
+				let _ = song.grab_artwork_data(imagedeal::ImageCodec::Jpg);
+				// let _ = song.grab_artwork_data(imagedeal::ImageCodec::Png);
+			}
+		}
+		for remix in &all_remixes {
+			let _ = remix.grab_artwork_data(imagedeal::ImageCodec::Jpg);
+			// let _ = remix.grab_artwork_data(imagedeal::ImageCodec::Png);
+		}
+	} else {
+		for album in &all_albums {
+			imagedeal::check_artwork(album.slug.clone());
+			for song in &album.songs {
+				song.check_artwork();
+			}
+		}
+		for remix in &all_remixes {
+			remix.check_artwork();
+		}
+	}
 
 	if build_r2_bucket {
-		globals::log_3("Building", "", "audio.astronomy487.com", globals::ANSI_CYAN);
 		for album in &all_albums {
 			album.try_encode(&all_albums);
 		}
@@ -63,59 +110,128 @@ fn distri_encode(build_r2_bucket: bool, build_static_website: bool) {
 	}
 
 	if build_static_website {
-		globals::log_3("Building", "", "music.astronomy487.com", globals::ANSI_CYAN);
-		fileops::clear_directory(
-			&std::path::Path::new(globals::filezone()).join("music.astronomy487.com")
-		);
+		let music_astronomy487_com =
+			std::path::Path::new(globals::filezone()).join("music.astronomy487.com");
+		if music_astronomy487_com.exists() {
+			fileops::clear_directory(&music_astronomy487_com);
+		} else {
+			std::fs::create_dir(&music_astronomy487_com)
+				.unwrap_or_else(|_| panic!("Couldn't create directory music.astronomy487.com"));
+		}
+
+		globals::log_3("Building", "", "Home page", globals::ANSI_BLUE);
+		homepage::make_home_page(&all_albums, &all_remixes, &all_assists);
+
+		globals::log_3("Building", "", "Link pages", globals::ANSI_BLUE);
 		for album in &all_albums {
-			crate::musicdata::Titlable::make_link_page(&musicdata::Titlable::Album(album));
-			for song in &album.songs {
-				if !song.bonus {
-					crate::musicdata::Titlable::make_link_page(&musicdata::Titlable::Song(
-						song,
-						Some(album)
-					));
+			linkpage::make_link_page(
+				&musicdata::Titlable::Album(album),
+				&all_albums,
+				build_r2_bucket
+			);
+			if !album.single {
+				for song in &album.songs {
+					if !song.bonus {
+						linkpage::make_link_page(
+							&musicdata::Titlable::Song(song),
+							&all_albums,
+							build_r2_bucket
+						);
+					}
 				}
 			}
 		}
 		for remix in &all_remixes {
-			crate::musicdata::Titlable::make_link_page(&musicdata::Titlable::Song(remix, None));
+			linkpage::make_link_page(
+				&musicdata::Titlable::Song(remix),
+				&all_albums,
+				build_r2_bucket
+			);
 		}
 
-		fileops::copy_recursive(
-			&std::path::Path::new(globals::filezone())
-				.join("source")
-				.join("webassets"),
-			&std::path::Path::new(globals::filezone()).join("music.astronomy487.com")
-		);
+		globals::log_3("Building", "", "Other web assets", globals::ANSI_BLUE);
+		// album art jpgs
 		fileops::copy_recursive(
 			&std::path::Path::new(globals::filezone())
 				.join("private")
 				.join("jpg"),
-			&std::path::Path::new(globals::filezone()).join("music.astronomy487.com")
+			&std::path::Path::new(globals::filezone())
+				.join("music.astronomy487.com")
+				.join("artwork")
 		);
-		std::fs::write(
+		// linkpage styles
+		fileops::write_file(
+			&std::path::Path::new(globals::filezone())
+				.join("music.astronomy487.com")
+				.join("style")
+				.with_extension("css"),
+			css::compress_css(
+				include_str!("assets/linkpage-style.css").to_owned() + &url::UrlSet::linkpage_css_for_platforms()
+			)
+		);
+		// fonts
+		std::fs::create_dir(
 			std::path::Path::new(globals::filezone())
 				.join("music.astronomy487.com")
-				.join("discog")
-				.with_extension("js"),
-			format!(
-				"let discog = {};",
-				std::fs::read_to_string(
-					std::path::Path::new(globals::filezone())
-						.join("source")
-						.join("discog")
-						.with_extension("json")
-				)
-				.expect("Couldn't read discog.json")
-			)
+				.join("font")
 		)
-		.expect("Couldn't write discog.js");
-		rss::make_rss(&all_albums);
+		.unwrap_or_else(|_| panic!("Couldn't create directory music.astronomy487.com/font",));
+		for (font, data) in [
+			(
+				"ClashDisplay-Variable.woff2",
+				include_bytes!("assets/font/ClashDisplay-Variable.woff2").to_vec()
+			),
+			(
+				"PublicSans-Variable.woff2",
+				include_bytes!("assets/font/PublicSans-Variable.woff2").to_vec()
+			),
+			(
+				"PublicSans-VariableItalic.woff2",
+				include_bytes!("assets/font/PublicSans-VariableItalic.woff2").to_vec()
+			)
+		] {
+			fileops::write_file(
+				&std::path::Path::new(globals::filezone())
+					.join("music.astronomy487.com")
+					.join("font")
+					.join(font)
+					.with_extension("woff2"),
+				data
+			);
+		}
+		// icons
+		icons::put_icons();
+		// others
+		for (name, data) in [
+			(
+				"squarelogo.png",
+				include_bytes!("assets/squarelogo.png").to_vec()
+			),
+			("404.html", include_bytes!("assets/404.html").to_vec()),
+			("favicon.ico", include_bytes!("assets/favicon.ico").to_vec())
+		] {
+			fileops::write_file(
+				&std::path::Path::new(globals::filezone())
+					.join("music.astronomy487.com")
+					.join(name),
+				data
+			);
+		}
+		/* fileops::write_file(
+			&std::path::Path::new(globals::filezone())
+				.join("music.astronomy487.com")
+				.join("discog")
+				.with_extension("json"),
+			std::fs::read_to_string(&json_location).expect("Couldn't read discog.json")
+		); */
+
+		globals::log_3("Building", "", "RSS feed", globals::ANSI_BLUE);
+		rss::make_rss(&all_albums, &all_remixes, &all_assists);
 	}
 }
 
 fn distri_publish() {
+	globals::log_2("Checking", "Internet connection", globals::ANSI_GREEN);
 	let connected_to_internet = std::net::TcpStream::connect_timeout(
 		&"1.1.1.1:80"
 			.parse()
@@ -123,9 +239,42 @@ fn distri_publish() {
 		std::time::Duration::from_secs(3)
 	)
 	.is_ok();
-	if !connected_to_internet {
-		panic!("Cannot connect to the internet right now");
-	} else {
+	assert!(
+		connected_to_internet,
+		"Cannot connect to the internet right now"
+	);
+
+	// check for credentials
+	globals::log_2(
+		"Validating",
+		"Credentials for wrangler",
+		globals::ANSI_GREEN
+	);
+	if !std::process::Command::new("wrangler.cmd")
+		.arg("whoami")
+		.stdout(std::process::Stdio::null())
+		.stderr(std::process::Stdio::null())
+		.status()
+		.map(|s| s.success())
+		.unwrap_or(false)
+	{
+		panic!("Missing credentials for wrangler; run `wrangler login`");
+	}
+	globals::log_2("Validating", "Credentials for rclone", globals::ANSI_GREEN);
+	if !std::process::Command::new("rclone")
+		.arg("lsd")
+		.arg("audio-astronomy487-com:")
+		.stdout(std::process::Stdio::null())
+		.stderr(std::process::Stdio::null())
+		.status()
+		.map(|s| s.success())
+		.unwrap_or(false)
+	{
+		panic!("Missing credentials for rclone; run `rclone config");
+	}
+
+	println!("This will publish content to the internet.");
+	if globals::ask_to_continue() {
 		distri_encode(true, true);
 		wrangle::music_astronomy487_com();
 		// wrangler can be talkative - delete its extra directories
@@ -148,8 +297,9 @@ fn distri_clean() {
 		"private/flac",
 		"private/mp3",
 		"private/jpg",
-		"music.astronomy487.com",
+		"private/png",
 		"audio.astronomy487.com/mp3",
+		"music.astronomy487.com",
 		"audio.astronomy487.com/flac"
 	];
 	let mut total_bytes: u64 = 0;
@@ -157,19 +307,19 @@ fn distri_clean() {
 		let path = filezone.join(dir);
 		total_bytes += fileops::dir_size_recursive(&path);
 	}
-	let total_bytes = fileops::format_file_size(total_bytes);
+	let total_bytes_as_text = fileops::format_file_size(total_bytes);
 	println!(
 		"This will delete {}{}{} of cached files across several directories.",
-		globals::ANSI_CYAN,
-		total_bytes,
+		globals::ANSI_RED,
+		total_bytes_as_text,
 		globals::ANSI_RESET
 	);
 	if globals::ask_to_continue() {
 		globals::log_3(
 			"Deleting",
 			"",
-			format!("{} of cached files", total_bytes),
-			globals::ANSI_CYAN
+			format!("{} of cached files", total_bytes_as_text),
+			globals::ANSI_RED
 		);
 		for dir in dirs {
 			fileops::clear_directory(&filezone.join(dir));
@@ -178,186 +328,134 @@ fn distri_clean() {
 }
 
 fn distri_help() {
-	println!("distri usage:");
-	for (command_name, description) in [
+	println!(
+		"distri v{}{} usage",
+		env!("CARGO_PKG_VERSION"),
+		if cfg!(debug_assertions) {
+			" (debug build)"
+		} else {
+			""
+		},
+	);
+	for (command, description, color) in [
 		(
 			"validate",
-			"Validate discog.json without encoding anything."
+			"Validate discog.json without encoding anything.",
+			globals::ANSI_GREEN
 		),
-		("encode", "Encode audio for audio.astronomy487.com."),
-		("build", "Build static website for music.astronomy487.com."),
+		(
+			"encode",
+			"Encode audio for audio.astronomy487.com.",
+			globals::ANSI_CYAN
+		),
+		(
+			"build",
+			"Build static website for music.astronomy487.com.",
+			globals::ANSI_BLUE
+		),
 		(
 			"clean",
-			"Clean out non-source files from the directory. Re-encoding everything will take a while, so be careful!"
+			"Clean out non-source files from the directory.",
+			globals::ANSI_RED
 		),
 		(
 			"publish",
-			"Publish content to Cloudflare R2 bucket and pages workers."
+			"Publish content to Cloudflare R2 and Pages.",
+			globals::ANSI_PURPLE
 		)
 	] {
-		let description = wrap(description, 35);
-		for (i, line) in description.iter().enumerate() {
-			globals::log_2(
-				if i == 0 {
-					"distri ".to_string() + command_name
-				} else {
-					"".to_string()
-				},
-				line,
-				globals::ANSI_YELLOW
-			);
-		}
+		globals::log_2(format!("distri {}", command), description, color);
 	}
-	println!(
-		"{}distri v{}{}",
-		globals::ANSI_GRAY,
-		std::env!("CARGO_PKG_VERSION"),
-		globals::ANSI_RESET
-	);
 }
 
 fn check_if_can_run() {
 	let mut can_run = true;
-	
+
+	url::UrlSet::check_valid_icons();
+
 	let mut missing_paths = Vec::new();
-	for d in [
+	for directory in [
 		"audio.astronomy487.com/mp3",
 		"audio.astronomy487.com/flac",
-		"music.astronomy487.com",
 		"private/about",
 		"private/flac",
 		"private/jpg",
 		"private/mp3",
+		"private/png",
 		"source/discog.json",
-		"source/webassets",
 		"source/audio",
-		"source/image"
+		"source/image",
+		"source/lyrics"
 	] {
-		let p = std::path::Path::new(globals::filezone()).join(d);
-		if !p.exists() {
-			missing_paths.push(d);
+		let path = std::path::Path::new(globals::filezone()).join(directory);
+		if !path.exists() {
+			missing_paths.push(directory);
 			can_run = false;
 		}
 	}
 	if !missing_paths.is_empty() {
-		globals::log_2("Using", globals::filezone(), globals::ANSI_MAGENTA);
+		globals::log_2(
+			"Using",
+			globals::filezone().replace("\\", "/"),
+			globals::ANSI_GREEN
+		);
 		for missing_path in &missing_paths {
 			globals::log_2(
 				"Missing",
 				format!("Path \"{}\"", missing_path),
-				globals::ANSI_YELLOW
+				globals::ANSI_RED
 			);
 			can_run = false;
 		}
 	}
 	std::mem::drop(missing_paths);
 
-	for (cmd, version_check) in [
-		("ffmpeg.exe", "-version"),
-		("wrangler.cmd", "--version"),
-		("rclone.exe", "--version")
-	] {
-		match std::process::Command::new(cmd)
-			.arg(version_check)
-			.stdout(std::process::Stdio::null())
-			.stderr(std::process::Stdio::null())
-			.status()
-		{
-			Ok(s) if s.success() => {}
-			_ => {
-				globals::log_2(
-					"Missing",
-					format!("Executable \"{}\"", cmd),
-					globals::ANSI_YELLOW
-				);
-				can_run = false;
-			}
+	for cmd in ["ffmpeg.exe", "wrangler.cmd", "rclone.exe"] {
+		if !globals::is_in_path(cmd) {
+			globals::log_2(
+				"Missing",
+				format!("Executable \"{}\"", cmd),
+				globals::ANSI_RED
+			);
+			can_run = false;
 		}
 	}
-	
-	// check for credentials
-	if !std::process::Command::new("wrangler.cmd")
-		.arg("whoami")
-		.stdout(std::process::Stdio::null())
-		.stderr(std::process::Stdio::null())
-		.status()
-		.map(|s| s.success())
-		.unwrap_or(false)
-	{
-		globals::log_2(
-			"Missing",
-			"Credentials for wrangler; run `wrangler login`",
-			globals::ANSI_YELLOW
-		);
-	}
-	if !std::process::Command::new("rclone")
-		.arg("lsd")
-		.arg("audio-astronomy487-com:")
-		.stdout(std::process::Stdio::null())
-		.stderr(std::process::Stdio::null())
-		.status()
-		.map(|s| s.success())
-		.unwrap_or(false)
-	{
-		globals::log_2(
-			"Missing",
-			"Credentials for rclone; run `rclone config`",
-			globals::ANSI_YELLOW
-		);	
-	}
 
-	if !can_run {
-		panic!("Cannot continue with missing prerequisites");
-	}
+	assert!(can_run, "Cannot continue with missing prerequisites");
 }
 
 fn set_panic_hook() {
 	std::panic::set_hook(Box::new(|info| {
+		eprintln!("\x07");
+
 		if let Some(location) = info.location() {
 			let short_file_name = std::path::Path::new(location.file())
-				.file_stem()
+				.file_name()
 				.expect("Couldn't find short file name for panic hook")
 				.to_string_lossy();
-			eprintln!(
-				"\n{}{}:{}:{}{}",
-				globals::ANSI_GRAY,
-				short_file_name,
-				location.line(),
-				location.column(),
-				globals::ANSI_RESET
-			);
+			if cfg!(debug_assertions) {
+				eprintln!(
+					"{}Error at {}:{}:{}{}",
+					globals::ANSI_RED,
+					short_file_name,
+					location.line(),
+					location.column(),
+					globals::ANSI_RESET
+				);
+			} else {
+				eprintln!("{}Error{}", globals::ANSI_RED, globals::ANSI_RESET);
+			}
 		}
 
 		let payload = info.payload();
-		let msg = if let Some(s) = payload.downcast_ref::<&str>() {
+		let maybe_msg = if let Some(s) = payload.downcast_ref::<&str>() {
 			Some((*s).to_string())
 		} else {
 			payload.downcast_ref::<String>().cloned()
 		};
-		if let Some(msg) = msg {
+		if let Some(msg) = maybe_msg {
 			eprintln!("{}", msg);
 		}
-
-		std::process::exit(487);
+		std::process::exit(1);
 	}));
-}
-
-fn wrap(text: &'static str, max_width: usize) -> Vec<String> {
-	let mut lines = Vec::new();
-	let mut current = String::new();
-
-	for word in text.split_whitespace() {
-		if current.len() + word.len() + 1 > max_width {
-			lines.push(current.trim_end().to_string());
-			current = String::new();
-		}
-		current.push_str(word);
-		current.push(' ');
-	}
-
-	if !current.is_empty() {
-		lines.push(current.trim_end().to_string());
-	}
-
-	lines
 }

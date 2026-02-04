@@ -1,0 +1,68 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="240" height="240" viewBox="20 20 200 200"
+     xmlns="http://www.w3.org/2000/svg">
+
+  <!-- Drop shadow -->
+  <defs>
+
+    <!-- Inner bevel / highlight -->
+    <linearGradient id="heartGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#8fe66f"/>
+      <stop offset="40%" stop-color="#61b549"/>
+      <stop offset="100%" stop-color="#2f6b27"/>
+    </linearGradient>
+
+    <!-- Soft highlight overlay -->
+    <radialGradient id="heartHighlight" cx="30%" cy="20%" r="60%">
+      <stop offset="0%" stop-color="white" stop-opacity="0.7"/>
+      <stop offset="40%" stop-color="white" stop-opacity="0.0"/>
+      <stop offset="100%" stop-color="white" stop-opacity="0.0"/>
+    </radialGradient>
+
+    <!-- Soft bottom shadow overlay -->
+    <radialGradient id="heartBottomShade" cx="50%" cy="90%" r="65%">
+      <stop offset="0%" stop-color="#060" stop-opacity="0.7"/>
+      <stop offset="50%" stop-color="#080" stop-opacity="0.3"/>
+      <stop offset="100%" stop-color="#040" stop-opacity="0.0"/>
+    </radialGradient>
+  </defs>
+
+  <!-- Heart base shape -->
+  <path
+    d="M120 200
+       L50 130
+       C20 100 20 60 50 40
+       C75 25 100 35 120 55
+       C140 35 165 25 190 40
+       C220 60 220 100 190 130
+       Z"
+    fill="url(#heartGradient)"
+    filter="url(#heartShadow)"
+	stroke="white"
+	stroke-width="3"
+  />
+
+  <!-- Highlight overlay -->
+  <path
+    d="M120 200
+       L50 130
+       C20 100 20 60 50 40
+       C75 25 100 35 120 55
+       C140 35 165 25 190 40
+       C220 60 220 100 190 130
+       Z"
+    fill="url(#heartHighlight)"
+  />
+
+  <!-- Bottom shading overlay -->
+  <path
+    d="M120 200
+       L50 130
+       C20 100 20 60 50 40
+       C75 25 100 35 120 55
+       C140 35 165 25 190 40
+       C220 60 220 100 190 130
+       Z"
+    fill="url(#heartBottomShade)"
+  />
+</svg>

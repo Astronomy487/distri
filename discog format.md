@@ -19,6 +19,7 @@ an Album contains the following fields :
 - `length` (required), the total length of the album (excluding bonus tracks) in seconds. may differ a little from the sum of song lengths because of rounding
 - `bcid`, a string identifier used for bandcamp album embeds
 - `url`, a Url object (more details below) that links to this album on various platforms
+- `genre` (required), a string representing the genre. see src/genre.rs for currently accepted genres
 - `color`, a Color object (more details below) for a three-color palette that complements the artwork
 - `songs`, a list of Songs present on the album, including bandcamp-exclusive bonus tracks
 - `about`, a string message that describes the album
@@ -72,7 +73,7 @@ function linkName(item) {
 	if ("artist" in item && item.artist != "Astro" && item) title = item.artist + " " + item.title;
 	title = title.toLowerCase();
 	title = title.normalize("NFD").replace(/[\u0300-\u036f]/g, '');
-	title = title.replace("ke$ha", "kesha").replace("a$tro", "astro");
+	title = title.replace("a$tro", "astro");
 	title = title.replace(/[()[\],.?!'"*$]/g, "");
 	title = title.replace(/[_/&+:;\s]+/g, '-').replace(/-+/g, '-');
 	title = title.split('').filter(c => c.charCodeAt(0) >= 0x00 && c.charCodeAt(0) <= 0x7f).join("");
@@ -95,7 +96,7 @@ fn slug(&self) -> String {
 	slug = unicode_normalization::UnicodeNormalization::nfd(slug.chars())
 		.filter(|c| !('\u{0300}'..='\u{036f}').contains(c))
 		.collect();
-	slug = slug.replace("ke$ha", "kesha").replace("a$tro", "astro");
+	slug = slug.replace("a$tro", "astro");
 	let re_punct =
 		regex::Regex::new(r#"[()\[\],.?!'"*\$]"#).expect("re_punct is invalid regex");
 	let re_sep = regex::Regex::new(r#"[_/&+:;\s]+"#).expect("re_sep is invalid regex");

@@ -1,7 +1,7 @@
 use crate::globals;
 
 pub fn audio_astronomy487_com() {
-	globals::log_2("Publishing", "audio.astronomy487.com", globals::ANSI_CYAN);
+	globals::log_2("Publishing", "audio.astronomy487.com", globals::ANSI_PURPLE);
 
 	let local_path = std::path::Path::new(globals::filezone())
 		.join("audio.astronomy487.com")
@@ -26,20 +26,18 @@ pub fn audio_astronomy487_com() {
 	#[allow(clippy::manual_flatten)]
 	for line in std::io::BufRead::lines(reader) {
 		if let Ok(text) = line {
-			let t = text.trim();
-			if t.contains("Copied (new)") {
-				globals::log_2("Putting", t, globals::ANSI_YELLOW);
-			} else if t.contains("Deleted") {
-				globals::log_2("Removing", t, globals::ANSI_YELLOW);
-			} else if t.contains("Updated") {
-				globals::log_2("Putting", t, globals::ANSI_YELLOW);
+			let trimmed = text.trim();
+			if trimmed.contains("Copied (new)") {
+				globals::log_2("Putting", trimmed, globals::ANSI_PURPLE);
+			} else if trimmed.contains("Deleted") {
+				globals::log_2("Removing", trimmed, globals::ANSI_PURPLE);
+			} else if trimmed.contains("Updated") {
+				globals::log_2("Putting", trimmed, globals::ANSI_PURPLE);
 			}
 		}
 	}
 
 	let status = child.wait().expect("Publish with rclone failed.");
 
-	if !status.success() {
-		panic!("Publish with rclone failed.");
-	}
+	assert!(status.success(), "Publish with rclone failed.");
 }

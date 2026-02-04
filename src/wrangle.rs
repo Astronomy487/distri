@@ -1,7 +1,7 @@
 use crate::globals;
 
 pub fn music_astronomy487_com() {
-	globals::log_2("Publishing", "music.astronomy487.com", globals::ANSI_CYAN);
+	globals::log_2("Publishing", "music.astronomy487.com", globals::ANSI_PURPLE);
 
 	let output = std::process::Command::new("wrangler.cmd")
 		.arg("pages")

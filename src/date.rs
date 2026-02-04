@@ -1,3 +1,5 @@
+#[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Debug)]
+// fields are lexicographically ordered! magic
 pub struct Date {
 	pub year: u32,
 	pub month: u32, // 1 = january
@@ -5,17 +7,28 @@ pub struct Date {
 }
 impl Date {
 	pub fn from(yyyy_mm_dd: &str) -> Date {
-		let bad = || -> ! {
+		let bad_format = || -> ! {
 			panic!("Date must be in YYYY-MM-DD format: \"{}\"", yyyy_mm_dd);
 		};
+		let bad_date = || -> ! {
+			panic!("Date {} is invalid", yyyy_mm_dd);
+		};
 		if yyyy_mm_dd.len() != 10 {
-			bad();
+			bad_format();
 		}
-		let year = yyyy_mm_dd[0..4].parse().unwrap_or_else(|_| bad());
-		let month = yyyy_mm_dd[5..7].parse().unwrap_or_else(|_| bad());
-		let day = yyyy_mm_dd[8..10].parse().unwrap_or_else(|_| bad());
+		let year = yyyy_mm_dd[0..4].parse().unwrap_or_else(|_| bad_format());
+		let month = yyyy_mm_dd[5..7].parse().unwrap_or_else(|_| bad_format());
+		let day = yyyy_mm_dd[8..10].parse().unwrap_or_else(|_| bad_format());
 		if !(1..=12).contains(&month) {
-			bad();
+			bad_date();
+		}
+		let days_in_each_month = [31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+		if day < 1 || day > days_in_each_month[(month - 1) as usize] {
+			bad_date();
+		}
+		let is_leap = (year % 4 == 0 && year % 100 != 0) || (year % 400 == 0);
+		if !is_leap && month == 2 && day == 29 {
+			bad_date();
 		}
 		Date { year, month, day }
 	}
@@ -65,6 +78,31 @@ impl Date {
 			self.year
 		)
 	}
+	pub fn today() -> Date {
+		let now = std::time::SystemTime::now()
+			.duration_since(std::time::UNIX_EPOCH)
+			.unwrap_or_else(|_| std::time::Duration::from_secs(0))
+			.as_secs();
+		let days = now / 86400;
+		let z_value = days as i64 + 719_468;
+		let era = (if z_value >= 0 {
+			z_value
+		} else {
+			z_value - 146_096
+		}) / 146_097;
+		let doe = z_value - era * 146_097;
+		let yoe = (doe - doe / 1460 + doe / 36_524 - doe / 146_096) / 365;
+		let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+		let mp = (5 * doy + 2) / 153;
+		let day = doy - (153 * mp + 2) / 5 + 1;
+		let month = mp + if mp < 10 { 3 } else { -9 };
+		let year = yoe + era * 400 + i64::from(month <= 2);
+		Date {
+			year: year.try_into().expect("Could not calculate today's date"),
+			month: month.try_into().expect("Could not calculate today's date"),
+			day: day.try_into().expect("Could not calculate today's date")
+		}
+	}
 
 	pub fn now_rfc822() -> String {
 		let now = std::time::SystemTime::now()
@@ -86,21 +124,8 @@ impl Date {
 			6 => "Sat",
 			_ => unreachable!()
 		};
-		let z_value = days as i64 + 719468;
-		let era = (if z_value >= 0 {
-			z_value
-		} else {
-			z_value - 146096
-		}) / 146097;
-		let doe = z_value - era * 146097;
-		let yoe = (doe - doe / 1460 + doe / 36524 - doe / 146096) / 365;
-		let year = yoe + era * 400;
-		let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
-		let mp = (5 * doy + 2) / 153;
-		let date = doy - (153 * mp + 2) / 5 + 1;
-		let month = mp + if mp < 10 { 3 } else { -9 };
-		let year = year + (month <= 2) as i64;
-		let month_name = match month {
+		let today = Date::today();
+		let month_name = match today.month {
 			1 => "Jan",
 			2 => "Feb",
 			3 => "Mar",
@@ -117,16 +142,15 @@ impl Date {
 		};
 		format!(
 			"{}, {:02} {} {} {:02}:{:02}:{:02} GMT",
-			weekday_name, date, month_name, year, hours, mins, secs
+			weekday_name, today.day, month_name, today.year, hours, mins, secs
 		)
 	}
-}
-
-impl std::fmt::Display for Date {
-	fn fmt(&self, fmt: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		write!(
-			fmt,
-			"{} {}, {}",
+	pub fn to_iso8601(&self) -> String {
+		format!("{:04}-{:02}-{:02}", self.year, self.month, self.day)
+	}
+	pub fn to_display(&self) -> String {
+		format!(
+			"{} {} {}",
 			match self.month {
 				1 => "Jan",
 				2 => "Feb",
@@ -146,4 +170,23 @@ impl std::fmt::Display for Date {
 			self.year
 		)
 	}
+	pub fn birthday(&self) -> bool {
+		self.month == 12 && self.day == 5
+	}
+}
+
+pub fn all_ascending_all_descending(dates: &[Date]) -> (bool, bool) {
+	let mut all_ascending = true;
+	let mut all_descending = true;
+	for window in dates.windows(2) {
+		let r0 = &window[0];
+		let r1 = &window[1];
+		if r0 < r1 {
+			all_descending = false;
+		}
+		if r0 > r1 {
+			all_ascending = false;
+		}
+	}
+	(all_ascending, all_descending)
 }
