@@ -5,16 +5,16 @@ distri is a music management suite I am making to handle all my music. It routes
 It expects the current working directory to contain the following four folders:
 
 - `audio.astronomy487.com`, stores the contents to be synced to the R2 bucket served at audio.astronomy487.com
-- `music.astronomy487.com`, stores the contents to be served at the static site music.astronomy487.com
+- `music.astronomy487.com`, stores the contents to be served at the static site music.astronomy487.com (actually this one is optional; distri generates it anew every run, so it can create this folder if it's missing)
 - `private`, stores private intermediate files
 - `source`, stores the original copies of all files
 
 In the source folder, it expects
 
-- `source/webassets`, files to be included with the static website build
 - `source/audio`, flacs of every song (albums in folders)
 - `source/image`, 3000x3000 PNGs of album/single artwork
-- `source/discog.json`, a JSON of all music data, as described in [[discog format.md]]
+- `source/lyrics`, lyric tsvs
+- `source/discog.json`, a JSON of all music data, as described in [[discog format.md]]. a version of this is shown at [[discog-example.json]] (no guarantee of updating, this just exists as an example)
 
 It can perform the following functions:
 
@@ -30,7 +30,6 @@ I write "you" as if anybody other than me is expected to execute this program
 
 ## wishlist before it's ready for actual use
 
-- statically generate index.html (goes with the above)
 - make sure synced lyric data actually makes it to USLT in mp3s
 - anything still marked TODO
 - anything still marked WISHLIST

@@ -42,7 +42,7 @@ fn main() {
 		distri_help();
 		return;
 	}
-	let allowed = ["logo", "publish", "validate", "encode", "build", "clean"];
+	let allowed = ["publish", "validate", "encode", "build", "clean"];
 	if args.iter().any(|a| !allowed.contains(&a.as_str())) {
 		distri_help();
 		return;
@@ -293,7 +293,6 @@ fn distri_publish() {
 fn distri_clean() {
 	let filezone = std::path::Path::new(globals::filezone());
 	let dirs = [
-		"private/about",
 		"private/flac",
 		"private/mp3",
 		"private/jpg",
@@ -340,7 +339,7 @@ fn distri_help() {
 	for (command, description, color) in [
 		(
 			"validate",
-			"Validate discog.json without encoding anything.",
+			"Validate discog.json without encoding or building anything.",
 			globals::ANSI_GREEN
 		),
 		(
@@ -360,11 +359,11 @@ fn distri_help() {
 		),
 		(
 			"publish",
-			"Publish content to Cloudflare R2 and Pages.",
+			"Encode, build, and publish content to Cloudflare R2 and Pages.",
 			globals::ANSI_PURPLE
 		)
 	] {
-		globals::log_2(format!("distri {}", command), description, color);
+		println!("distri {}{:<11}{}{}", color, command, globals::ANSI_RESET, description);
 	}
 }
 
@@ -377,7 +376,6 @@ fn check_if_can_run() {
 	for directory in [
 		"audio.astronomy487.com/mp3",
 		"audio.astronomy487.com/flac",
-		"private/about",
 		"private/flac",
 		"private/jpg",
 		"private/mp3",

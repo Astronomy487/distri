@@ -808,6 +808,10 @@ impl Song {
 						);
 						None */
 						panic!("Couldn't read lyrics text {}.tsv", slug);
+						// TODO only panic iff we are supposed to encode
+						// building with missing lyrics is fine
+						// encoding with missing lyrics is problematic because the mp3 and flac files with missing metadata will not be corrected later
+						// but i don't really want to pass a boolean around all these constructors :P hmmmm
 					}
 				}
 			} else {
@@ -1328,7 +1332,7 @@ impl Assist {
 
 		// artwork validation
 		let artwork = &assist.artwork;
-		let valid_prefix = artwork.starts_with("https://") || artwork.starts_with("http://");
+		let valid_prefix = artwork.starts_with("https://");
 		let valid_suffix = artwork.ends_with(".jpg") || artwork.ends_with(".png");
 		assert!(
 			valid_prefix && valid_suffix,

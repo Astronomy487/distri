@@ -155,7 +155,7 @@ define_urlset! {
 	"Deezer",           deezer,           "deezer",         "deezer.com",       ["#a238ff"];
 	"Pandora",          pandora,          "pandora",        "pandora.com",      ["#1b86f6", "#3160f9", "#00a0ee"];
 	"Tidal",            tidal,            "tidal",          "tidal.com",        ["#33ffee"];
-	//"Tencent Music", tencent_music, "tencentmusic", "tencentmusic.com", [];
+	"Tencent Music",    tencent_music,    "tencentmusic",   "tencentmusic.com", ["#1772f9"];
 }
 
 // ^ These icons are a subset of those provided by icons.rs

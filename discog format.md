@@ -20,7 +20,7 @@ an Album contains the following fields :
 - `bcid`, a string identifier used for bandcamp album embeds
 - `url`, a Url object (more details below) that links to this album on various platforms
 - `genre` (required), a string representing the genre. see src/genre.rs for currently accepted genres
-- `color`, a Color object (more details below) for a three-color palette that complements the artwork
+- `color` (required), a Color object (more details below) for a three-color palette that complements the artwork
 - `songs`, a list of Songs present on the album, including bandcamp-exclusive bonus tracks
 - `about`, a string message that describes the album
 - `upc`, the album UPC
@@ -37,30 +37,43 @@ songs can either be remixes (found in `discog.remixes`) or non-remixes (found in
 - `url`, a Url object (more details below) that links to the song on various platforms
 - `artwork`, artwork to represent a single song. either `true` if the location of single artwork is named after the song, or a string if it has some other name
 - `bonus`, a boolean indicating if this is a bandcamp-exclusive bonus track. bonus tracks usually don't have public urls, except when they do
-- `lyrics`, a string of lyrics as a tsv. each line is a lyric entry (including empty lyrics for breaks between sections). columns 1 and 2 are start and end timestamps for each lyric. column 3 is the lyric. any additional columns, if present, are key:value pairs (possible keys are `language` and `vocalist`; key:value pairs propagate to lower lines until that key is written again; default values are `language:en` and `vocalist:Astro`)
+- `lyrics`, a boolean if lyrics are provided
 - `color`, a Color object (more details below) for a three-color palette that complements the artwork. non-remixes may inherit color palette from the parent album
 - `samples`, a list of strings, where each string is the full name of a song sampled on this song
 - `event` a boolean indicating if this is a dj set for an event. if so, then a fully formatted song title should appear as "Astro @ [Title]" (the artist field won't be supplied!)
 - `isrc`, the track ISRC
-- `about`, a string message that describes the track
+- `about`, a string message that describes the track, with paragraphs separated by \n\n
+- `genre`, a string representing the genre. cannot be provided if song is on an album. must be provided if song is not on an album.
 
 ## Color format
 
 Color objects have just three properties, each of which are a string hex code (e.g. "#FF0000"). they form a little color palette for use with a particular song or album.
 
-- `bg`, the background
-- `fg`, the foreground
-- `acc`, the accent color
+- `background`, the background
+- `foreground`, the foreground
+- `accent`, the accent color
 
 colors have an optional fourth property, `mode`, one of "black" or "white". if present, colorful ui elements (namely logos of other services) should appear as black or white instead of in color. i only use this when the background is not sufficiently black (greater than like 25% brightness)
 
 the foreground and accent colors should appear on top of the background. the accent color should only be used for larger/bolder text. the foreground color and accent color should not appear on top of one another!
 
-the foreground and background colors have a contrast ratio of at least 4.5. the accent and background colors have a contrast ratio of at least 3. these meet the WCAG AA accessibility guidelines.
+the foreground and background colors have a contrast ratio of at least 4.5. the accent and background colors have a contrast ratio of at least 3. these meet the WCAG AA accessibility guidelines. distri checks for this
 
 ## Url format
 
 a Url object holds urls to an item across streaming platforms. the possible keys are `Bandcamp`, `YouTube`, `YouTube Full Mix`, `Apple Music`, `Spotify`, `Soundcloud`, `Amazon Music`, `iHeartRadio`, and `Tencent Music`
+
+## Lyrics format
+
+if a song has lyrics, distri will check source/lyrics for a tsv. the first three columns are fixed:
+
+1. a start time for a line (six decimal points of precision)
+2. an end time for a line (six decimal points of precision)
+3. the text for the line
+
+subsequent columns should be key:value pairs (e.g. language:en and vocalist:Astro). future rows will inherit values above if they are not specified. every row must have a defined language and vocalist. language use ISO 639 langauge codes (2 or 3 letters acceptable)
+
+empty lines (not even \t allowed) can be used to separate stanzas
 
 ## Notes on slugs
 
@@ -85,26 +98,24 @@ function linkName(item) {
 ```
 
 ```rust
-// where self has methods .artist() -> String and .title() -> String
-fn slug(&self) -> String {
-	let mut slug = if self.artist() != "Astro" {
-		format!("{} {}", self.artist(), self.title())
+pub fn compute_slug(artist: &str, title: &str) -> String {
+	let mut slug = if artist == "Astro" {
+		title.to_owned()
 	} else {
-		self.title().to_owned()
+		format!("{} {}", artist, title)
 	};
 	slug = slug.to_lowercase();
 	slug = unicode_normalization::UnicodeNormalization::nfd(slug.chars())
 		.filter(|c| !('\u{0300}'..='\u{036f}').contains(c))
 		.collect();
 	slug = slug.replace("a$tro", "astro");
-	let re_punct =
-		regex::Regex::new(r#"[()\[\],.?!'"*\$]"#).expect("re_punct is invalid regex");
+	let re_punct = regex::Regex::new(r#"[()\[\],.?!'"*\$]"#).expect("re_punct is invalid regex");
 	let re_sep = regex::Regex::new(r#"[_/&+:;\s]+"#).expect("re_sep is invalid regex");
 	let re_dash = regex::Regex::new(r#"-+"#).expect("re_dash is invalid regex");
 	slug = re_punct.replace_all(&slug, "").into_owned();
 	slug = re_sep.replace_all(&slug, "-").into_owned();
 	slug = re_dash.replace_all(&slug, "-").into_owned();
-	slug = slug.chars().filter(|c| c.is_ascii()).collect();
+	slug = slug.chars().filter(char::is_ascii).collect();
 	while slug.starts_with('-') {
 		slug = slug[1..].to_string();
 	}
@@ -112,14 +123,16 @@ fn slug(&self) -> String {
 		slug = slug[..slug.len() - 1].to_string();
 	}
 	slug = slug.replace("--", "-");
+	assert!(
+		slug.chars()
+			.all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-'),
+		"Could not generate a valid slug for artist {} and title {}; we arrived at {}",
+		artist,
+		title,
+		slug
+	);
 	slug
 }
 ```
 
 these are only non-unique for singles, in which case the 'song' and the 'single' from which it came have the same identifier (i think that's ok)
-
-these are used to access
-
-- link pages
-- audio locations
-- artwork locations (album slug for album artwork, song slug for single artwork (unless overrided with some explicit string))
