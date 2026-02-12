@@ -21,68 +21,74 @@ enum EntryType {
 fn song_xml(
 	song: &musicdata::Song, for_album: Option<(&musicdata::Album, &str)>, have_link: bool
 ) -> xml::XmlNode {
-	xml::XmlNode::new("a-song").with_child(
-		xml::XmlNode::new("song-c")
-			.with_child(
-				xml::XmlNode::new("the-date")
-					.with_text(song.released.to_display())
-					.maybe_with_attribute("class",
-						if song.released.birthday() {
-							Some("bday")
-						} else {
-							None
-						}
-					)
-			)
-			.with_child(
-				xml::XmlNode::new("song-title")
-					.with_child({
-						if song.title == "Hover" && song.artist == "Astro" {
-							xml::XmlNode::new("span")
-								.with_child(
+	xml::XmlNode::new("a-song")
+		.with_child(
+			xml::XmlNode::new("song-c")
+				.with_child(
+					xml::XmlNode::new("the-date")
+						.with_text(song.released.to_display())
+						.maybe_with_attribute("class",
+							if song.released.birthday() {
+								Some("bday")
+							} else {
+								None
+							}
+						)
+				)
+				.with_child(
+					xml::XmlNode::new("song-title")
+						.with_child({
+							// boolean tells if it is an external link
+							let maybe_link: Option<(String, bool)> = if have_link {
+								Some((format!("{}/", song.slug), false))
+							} else {
+								song.url.try_to_get_at_least_one_link().map(|s| (s.to_owned(), true))
+							};
+							let is_hover = song.title == "Hover" && song.artist == "Astro";
+							let mut span = xml::XmlNode::new("span");
+							if let Some((link, is_external)) = maybe_link {
+								span.add_child(
 									xml::XmlNode::new("a")
-										.with_attribute(
-											"href",
-											"https://www.youtube.com/watch?v=XRCwIC_8DHM"
-										)
-										.with_text("Hover")
-								)
-								.with_child(
+										.with_attribute("href", link)
+										.maybe_with_attribute("class", if is_external {Some("external")} else {None})
+										.with_text(smartquotes::smart_quotes(&song.format_title_short()))
+								);
+							} else {
+								span.add_text(smartquotes::smart_quotes(&song.format_title_short()));
+							}
+							if is_hover {
+								// technically panics in the case Hover has no url, since the <span> will have direct text children by now. lol I LOVE AVOIDING TYPE-SAFE PATTERNS!!
+								span.add_child(
 									xml::XmlNode::new("span")
 										.with_attribute("style", "color: var(--gray);")
 										.with_text(" — Not everyone was there !")
-								)
-								.with_child({
+								);
+								span.add_child({
 									assert!(icons::valid_icon("greenheart"));
 									xml::XmlNode::new("img")
 										.with_attribute("src", "icons/greenheart.svg")
 										.with_attribute("style", "margin-left: 0.5rem; height: 1.25rem; margin-top: -0.125rem; user-select: none; vertical-align: middle;")
-								})
-						} else {
-							if have_link {
-								xml::XmlNode::new("a")
-									.with_attribute("href", format!("{}/", song.slug))
-							} else {
-								xml::XmlNode::new("span")
+								});
 							}
-							.with_text(smartquotes::smart_quotes(song.format_title_short()))
-						}
-					})
-					.maybe_with_child(for_album.map(|(album, what_kind_of_single)| {
-						xml::XmlNode::new("as-single-for").with_text(format!(
-							"{} for \0<i\0>{}\0</i\0>",
-							what_kind_of_single,
-							album.format_title_short()
-						))
-					}))
-			)
-	)
+							span
+						})
+						.maybe_with_child(for_album.map(|(album, what_kind_of_single)| {
+							xml::XmlNode::new("as-single-for").with_text(format!(
+								"{} for \0<cite\0>{}\0</cite\0>",
+								what_kind_of_single,
+								album.format_title_short()
+							))
+						}))
+				)
+		)
 }
 
 pub fn make_home_page(
 	all_albums: &[musicdata::Album], all_remixes: &[musicdata::Song],
 	all_assists: &[musicdata::Assist]
 ) {
+	assert!(icons::valid_icon("external")); // used in homepage-styles.css
+
 	let head = xml::XmlNode::new("head")
 		.with_child(xml::XmlNode::new("meta").with_attribute("charset", "utf-8"))
 		.with_child(
@@ -90,11 +96,6 @@ pub fn make_home_page(
 				.with_attribute("rel", "icon")
 				.with_attribute("href", "favicon.ico")
 				.with_attribute("type", "image/ico")
-		)
-		.with_child(
-			xml::XmlNode::new("meta")
-				.with_attribute("name", "theme-color")
-				.with_attribute("content", "#000000") // WISHLIST do i actually want theme-color on home page? test on mobile & discord
 		)
 		.with_child(
 			xml::XmlNode::new("link")
@@ -277,7 +278,12 @@ pub fn make_home_page(
 					EntryType::Album,
 					&album.released,
 					xml::XmlNode::new("an-album")
-						.with_attribute("style", album.palette.style_text() + album.palette.home_page_album_additional_styles())
+						.with_attribute("style", album.palette.style_text())
+						.maybe_with_attribute("class", if album.palette.home_page_album_needs_borders() {
+							Some("extra-border")
+						} else {
+							None
+						})
 						.with_child(
 							xml::XmlNode::new("album-c")
 								.with_child(
@@ -333,10 +339,10 @@ pub fn make_home_page(
 												)
 										);
 									if let Some(text) = &album.about {
-										for paragraph_slice in text.split("\n\n") {
-											let mut paragraph = smartquotes::smart_quotes(paragraph_slice.to_string());
+										for paragraph_slice in text {
+											let mut paragraph = smartquotes::smart_quotes(paragraph_slice);
 											for album_title_to_italicize in all_albums.iter().filter(|a| !a.single).map(|a| a.title.clone()) {
-												paragraph = paragraph.replace(&album_title_to_italicize, &format!("\0<i\0>{}\0</i\0>", album_title_to_italicize))
+												paragraph = paragraph.replace(&album_title_to_italicize, &format!("\0<cite\0>{}\0</cite\0>", album_title_to_italicize))
 											}
 											column.add_child(
 												xml::XmlNode::new("p").with_text(paragraph)
@@ -376,7 +382,7 @@ pub fn make_home_page(
 																.with_child(
 																	xml::XmlNode::new("a")
 																		.with_attribute("href", format!("{}/", song.slug))
-																		.with_text(smartquotes::smart_quotes(song.format_title_short()))
+																		.with_text(smartquotes::smart_quotes(&song.format_title_short()))
 																)
 														)
 												);
@@ -394,7 +400,15 @@ pub fn make_home_page(
 														"Digital download includes bonus {} {}",
 														if bonus_songs.len() == 1 {"track"} else {"tracks"},
 														{
-															let bonus_songs_texts = bonus_songs.iter().map(|bonus_song| format!("“{}”", smartquotes::smart_quotes(bonus_song.format_title_short()))).collect::<Vec<_>>();
+															let bonus_songs_texts = bonus_songs
+																.iter()
+																.map(|bonus_song|
+																	format!(
+																		"“{}”",
+																		smartquotes::smart_quotes(&bonus_song.format_title_short())
+																	)
+																)
+																.collect::<Vec<_>>();
 															match &bonus_songs_texts[..] {
 																[] => unreachable!(),
 																[one] => one.to_owned(),
@@ -488,11 +502,12 @@ pub fn make_home_page(
 										.with_child(
 											xml::XmlNode::new("a")
 												.with_attribute("href", &assist.url)
-												.with_text(&assist.titlable)
+												.with_attribute("class", "external")
+												.with_text(smartquotes::smart_quotes(&assist.titlable))
 										)
 										.with_child(
 											xml::XmlNode::new("p")
-												.with_text(&assist.role)
+												.with_text(smartquotes::smart_quotes(&assist.role))
 										)
 								)
 						)
@@ -529,20 +544,17 @@ pub fn make_home_page(
 			xml::XmlNode::new("footer")
 				.with_child(
 					xml::XmlNode::new("span")
-						.with_text("Generated by ")
+						.with_text("Powered by ")
 				)
 				.with_child(
 					xml::XmlNode::new("a")
-						.with_text(format!(
-							"distri v{}",
-							env!("CARGO_PKG_VERSION")
-						))
+						.with_text("distri")
 						.with_attribute("href", "https://github.com/Astronomy487/distri/")
 				)
-				.with_child(
+				/* .with_child(
 					xml::XmlNode::new("span")
 						.with_text(format!(" on {}", date::Date::today().to_display()))
-				)
+				) */
 				.with_child(
 					xml::XmlNode::new("div")
 						.with_text(format!("© {} Astro “astronomy487”", date::Date::today().year))

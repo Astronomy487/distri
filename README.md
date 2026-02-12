@@ -30,12 +30,28 @@ I write "you" as if anybody other than me is expected to execute this program
 
 ## wishlist before it's ready for actual use
 
-- make sure synced lyric data actually makes it to USLT in mp3s
-- anything still marked TODO
-- anything still marked WISHLIST
+- make sure synced lyric data actually makes it to USLT in mp3s; the audio players i own have failed me and i'm suspicious
+- anything marked TODO or WISHLIST
+- fix icons to actually be brand-guidelines-compliant
+	- currently, i have a single-color version that gets recolored fully white or fully black as needed
+	- this is not standards compliant; the triangle on YouTube logo should be white on the red, not empty on the red. same for black in Spotify logo
+	- we need separate svgs for each of white, black, and color
+		- on not-hover, present the one that matches the current palette mode
+		- on hover, present white if withwhite or present black if withblack
 
 ### changelog
 
+- v0.5.0
+	- added icon for external links on home page (assets/icon/external.svg)
+	- `Album` attribute `about` is now an `Option<Vec<String>>` instead of a `Option<String>`, so paragraphs are already separated. whitespace is validated. the original discog.json still has \n\n
+	- removed `<meta name="theme-color" />` from the home page
+	- albums, remixes, and assists are now required to be non-decreasing (instead of just monotonic)
+	- missing lyrics will panic only if we tell it to panic in globals.rs. this lets me build the static website with missing lyrics if i want - this will eventually be phased out once all the lyrics are done. encoding is not allowed if missing lyrics are allowed
+	- albums and songs can now specify custom slugs; useful for titles that don't use roman alphabet
+	- more lyric formats for download (full list: txt lrc srt vtt tsv)
+	- album titles in webpages now use `<cite>` instead of `<i>` because it's more semantic
+	- include RSS items for assists
+	- static website only includes public-facing artwork. no bonus track artwork
 - v0.4.0
 	- moved link page generation to its own page, using my own xml.rs instead of maud
 	- moved home page generation to its own page, using my own xml.rs instead of maud

@@ -13,7 +13,7 @@ fn is_opening_brackets(character: char) -> bool {
 	.contains(&character)
 }
 
-pub fn smart_quotes(text: String) -> String {
+pub fn smart_quotes(text: &str) -> String {
 	let mut previous_character = ' ';
 	assert!(open_after_char(previous_character));
 	let mut new_text = String::new();

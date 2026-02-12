@@ -39,6 +39,8 @@ pub const ANSI_RESET: &str = "\x1b[0m";
 
 pub const FALLBACK_ARTWORK_NAME: &str = "fallback";
 
+pub static PANIC_ON_MISSING_LYRICS: bool = false;
+
 // Particular to the Cloudflare pages project I use to host the static website
 pub const CF_PAGES_NAME: &str = "astronomy487-music";
 
@@ -67,7 +69,7 @@ pub fn ask_to_continue() -> bool {
 		.read_line(&mut input)
 		.unwrap_or_else(|_| panic!("Failed to read input"));
 	let user_choice = input.trim().to_lowercase();
-	print!("{}", ANSI_RESET);
+	// print!("{}", ANSI_RESET);
 	user_choice == "yes"
 }
 
@@ -103,7 +105,7 @@ pub fn compute_slug(artist: &str, title: &str) -> String {
 	slug = unicode_normalization::UnicodeNormalization::nfd(slug.chars())
 		.filter(|c| !('\u{0300}'..='\u{036f}').contains(c))
 		.collect();
-	slug = slug.replace("a$tro", "astro");
+	slug = slug.replace("a$tro", "astro"); // i love kesha
 	let re_punct = regex::Regex::new(r#"[()\[\],.?!'"*\$]"#).expect("re_punct is invalid regex");
 	let re_sep = regex::Regex::new(r#"[_/&+:;\s]+"#).expect("re_sep is invalid regex");
 	let re_dash = regex::Regex::new(r#"-+"#).expect("re_dash is invalid regex");
@@ -127,4 +129,13 @@ pub fn compute_slug(artist: &str, title: &str) -> String {
 		slug
 	);
 	slug
+}
+
+pub fn check_custom_slug(slug: &str) {
+	assert!(
+		slug.chars()
+			.all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-'),
+		"Custom slug \"{}\" is not valid",
+		slug
+	);
 }

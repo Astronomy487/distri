@@ -26,7 +26,7 @@ impl XmlNode {
 			}
 			XmlNodeContent::Text(_) => {
 				panic!("Cannot put child on XML node that contains text");
-			}
+			} //sdfsdf
 			XmlNodeContent::None => {
 				self.content = XmlNodeContent::Children(vec![child]);
 			}

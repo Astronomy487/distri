@@ -70,7 +70,7 @@ pub struct Album {
 	pub length: u32,
 	upc: Option<String>,
 	bcid: Option<String>,
-	pub about: Option<String>,
+	pub about: Option<Vec<String>>,
 	pub palette: color::Palette,
 	pub single: bool,
 	pub compilation: bool,
@@ -93,9 +93,9 @@ pub struct Song {
 	pub length: u32,
 	isrc: Option<String>,
 	pub lyrics: Option<lyric::Lyrics>,
-	palette: color::Palette, // may inherit from parent
-	genre: genre::Genre,     // MUST inherit from parent if on an album
-	pub unreleased: bool,    // may inherit from parent
+	pub palette: color::Palette, // may inherit from parent
+	genre: genre::Genre,         // MUST inherit from parent if on an album
+	pub unreleased: bool,        // may inherit from parent
 	pub url: url::UrlSet,
 	samples: Option<Vec<String>>, // report as "Mix tracklist" if event
 	about: Option<String>
@@ -307,7 +307,8 @@ impl Album {
 				"compilation",
 				"artist",
 				"single",
-				"unreleased"
+				"unreleased",
+				"slug"
 			]
 		);
 		let url_set = {
@@ -353,7 +354,14 @@ impl Album {
 			);
 			title.to_string()
 		};
-		let slug = globals::compute_slug(&artist, &title);
+		let slug = match obj.get("slug") {
+			Some(serde_json::Value::String(string)) => {
+				globals::check_custom_slug(string);
+				string.to_string()
+			}
+			Some(other) => panic!("Custom slug \"{}\" is not a string", other),
+			None => globals::compute_slug(&artist, &title)
+		};
 
 		let mut album = Album {
 			songs: Vec::new(),
@@ -444,12 +452,24 @@ impl Album {
 					.to_owned()
 			}),
 			about: obj.get("about").map(|v| {
-				v.as_str()
+				let string = v
+					.as_str()
 					.unwrap_or_else(|| {
 						panic!("Album JSON attribute \"about\" is not a string: {}", v)
 					})
-					.to_owned()
-				// TODO check trimmed, make sure paragraphs are separated by \n\n
+					.to_owned();
+				string
+					.split("\n\n")
+					.map(|paragraph| {
+						assert!(
+							!paragraph.starts_with(char::is_whitespace)
+								&& !paragraph.ends_with(char::is_whitespace),
+							"Album JSON attribute \"about\" has non-trimmed paragraph: {}",
+							paragraph
+						);
+						paragraph.to_string()
+					})
+					.collect()
 			}),
 			palette: color::Palette::from(
 				obj.get("color")
@@ -565,8 +585,10 @@ impl Album {
 		text.push(self.released.to_display());
 
 		if let Some(about) = &self.about {
-			text.push(String::new());
-			text.push(about.to_string());
+			for paragraph in about {
+				text.push(String::new());
+				text.push(paragraph.to_string());
+			}
 		}
 
 		text.push(String::new());
@@ -629,7 +651,8 @@ impl Song {
 				"about",
 				"artwork",
 				"unreleased",
-				"genre"
+				"genre",
+				"slug"
 			]
 		);
 		let url_set = match obj.get("url") {
@@ -674,7 +697,14 @@ impl Song {
 			title.to_string()
 		};
 
-		let slug = globals::compute_slug(&artist, &title);
+		let slug = match obj.get("slug") {
+			Some(serde_json::Value::String(string)) => {
+				globals::check_custom_slug(string);
+				string.to_string()
+			}
+			Some(other) => panic!("Custom slug \"{}\" is not a string", other),
+			None => globals::compute_slug(&artist, &title)
+		};
 
 		let mut song = Song {
 			parent_album_indices: None,
@@ -801,17 +831,16 @@ impl Song {
 				match std::fs::read_to_string(lyrics_location) {
 					Ok(text) => Some(lyric::Lyrics::from(&text)),
 					Err(_) => {
-						/* globals::log_2(
-							"Warning",
-							format!("Couldn't read lyrics text {}.tsv", slug),
-							globals::ANSI_RED
-						);
-						None */
-						panic!("Couldn't read lyrics text {}.tsv", slug);
-						// TODO only panic iff we are supposed to encode
-						// building with missing lyrics is fine
-						// encoding with missing lyrics is problematic because the mp3 and flac files with missing metadata will not be corrected later
-						// but i don't really want to pass a boolean around all these constructors :P hmmmm
+						if globals::PANIC_ON_MISSING_LYRICS {
+							panic!("Couldn't read lyrics text {}.tsv", slug);
+						} else {
+							globals::log_2(
+								"Warning",
+								format!("Couldn't read lyrics text {}.tsv", slug),
+								globals::ANSI_RED
+							);
+							None
+						}
 					}
 				}
 			} else {
@@ -877,10 +906,7 @@ impl Song {
 					})
 				})
 			) {
-				(None, None) => panic!(
-					"Song {} must provide a genre for itself",
-					title
-				),
+				(None, None) => panic!("Song {} must provide a genre for itself", title),
 				(None, Some(genre_string)) => genre::Genre::from(genre_string),
 				(Some(album), None) => album.genre.clone(),
 				(Some(album), Some(genre_string)) => panic!(
@@ -1350,7 +1376,7 @@ impl Assist {
 		} else {
 			panic!("assist.role is empty");
 		}
-		
+
 		assist
 	}
 }
@@ -1367,7 +1393,7 @@ pub fn get_music_data(json_path: &std::path::Path) -> (Vec<Album>, Vec<Song>, Ve
 		"Discography",
 		&["albums", "remixes", "assists"]
 	);
-	let mut all_remixes: Vec<Song> = {
+	let all_remixes: Vec<Song> = {
 		let mut remixes = Vec::new();
 		for remix_json in object
 			.get("remixes")
@@ -1388,7 +1414,7 @@ pub fn get_music_data(json_path: &std::path::Path) -> (Vec<Album>, Vec<Song>, Ve
 		.iter()
 		.map(Album::from_json)
 		.collect();
-	let mut all_assists: Vec<Assist> = object
+	let all_assists: Vec<Assist> = object
 		.get("assists")
 		.expect("discog.json has no attribute \"assists\"")
 		.as_array()
@@ -1426,6 +1452,8 @@ pub fn get_music_data(json_path: &std::path::Path) -> (Vec<Album>, Vec<Song>, Ve
 		);
 	};
 	check_slug_collision("");
+	check_slug_collision("icons");
+	check_slug_collision("artwork");
 	for album in &all_albums {
 		if album.single {
 			assert!(
@@ -1524,25 +1552,19 @@ pub fn get_music_data(json_path: &std::path::Path) -> (Vec<Album>, Vec<Song>, Ve
 		);
 	}
 
-	// check for monotonic release dates and force ascending
-	match date::all_ascending_all_descending(&all_albums.iter().map(|a| a.released.clone()).collect::<Vec<_>>()) {
-		(false, false) => panic!("Albums must be ordered by release date"),
-		(false, true) => all_albums.reverse(),
-		(true, false) => {},
-		(true, true) => {} // funny
-	}
-	match date::all_ascending_all_descending(&all_remixes.iter().map(|a| a.released.clone()).collect::<Vec<_>>()) {
-		(false, false) => panic!("Remixes must be ordered by release date"),
-		(false, true) => all_remixes.reverse(),
-		(true, false) => {},
-		(true, true) => {} // funny
-	}
-	match date::all_ascending_all_descending(&all_assists.iter().map(|a| a.released.clone()).collect::<Vec<_>>()) {
-		(false, false) => panic!("Assists must be ordered by release date"),
-		(false, true) => all_assists.reverse(),
-		(true, false) => {},
-		(true, true) => {} // funny
-	}
+	// check for ascending release dates
+	assert!(
+		all_albums.is_sorted_by(|a, b| a.released <= b.released),
+		"Albums are not sorted from oldest to newest"
+	);
+	assert!(
+		all_remixes.is_sorted_by(|a, b| a.released <= b.released),
+		"Remixes are not sorted from oldest to newest"
+	);
+	assert!(
+		all_assists.is_sorted_by(|a, b| a.released <= b.released),
+		"Assists are not sorted from oldest to newest"
+	);
 
 	(all_albums, all_remixes, all_assists)
 }

@@ -66,7 +66,9 @@ pub fn make_link_page(
 		for codec in [
 			lyric::TextCodec::Txt,
 			lyric::TextCodec::Lrc,
-			lyric::TextCodec::Srt
+			lyric::TextCodec::Srt,
+			lyric::TextCodec::Vtt,
+			lyric::TextCodec::Tsv
 		] {
 			let lyrics_location = destination_folder
 				.join("lyrics")
@@ -262,7 +264,7 @@ pub fn make_link_page(
 				.with_attribute("alt", &format_title_short)
 		}))
 		.with_child(
-			xml::XmlNode::new("h1").with_text(smartquotes::smart_quotes(format_title_short))
+			xml::XmlNode::new("h1").with_text(smartquotes::smart_quotes(&format_title_short))
 		)
 		.with_child(
 			xml::XmlNode::new("table").with_child(
@@ -296,7 +298,10 @@ pub fn make_link_page(
 					tr.add_child(
 						xml::XmlNode::new("td").with_child(
 							xml::XmlNode::new("a")
-								.with_attribute("class", format!("{} streamlink {}", short, with_color))
+								.with_attribute(
+									"class",
+									format!("{} streamlink {}", short, with_color)
+								)
 								.with_attribute("href", value.to_string())
 								.with_child(
 									xml::XmlNode::new("img")
@@ -316,7 +321,8 @@ pub fn make_link_page(
 			table
 		});
 	if !titlable.unreleased() {
-		// When finding filesizes, WARN if they aren't present. user better read output
+		// When finding filesizes, panic if they should have sizes and don't
+		// (if we didn't encode, then report 0 B; it's fine, this is just a `distri build`)
 		let mp3_size = titlable
 			.audio_download_size(&musicdata::AudioCodec::Mp3)
 			.unwrap_or_else(|| {
@@ -376,9 +382,12 @@ pub fn make_link_page(
 				.with_child({
 					let mut tr = xml::XmlNode::new("tr")
 						.with_child(xml::XmlNode::new("td").with_text("Lyrics"));
-					for (codec, codec_description) in [
-						(lyric::TextCodec::Txt, "Text"),
-						(lyric::TextCodec::Lrc, "Synced") // (lyric::TextCodec::Srt, "Captions")
+					for codec in [
+						lyric::TextCodec::Txt,
+						lyric::TextCodec::Lrc,
+						lyric::TextCodec::Srt,
+						lyric::TextCodec::Vtt,
+						lyric::TextCodec::Tsv
 					] {
 						tr.add_child(
 							xml::XmlNode::new("td").with_child(
@@ -388,12 +397,34 @@ pub fn make_link_page(
 										"download",
 										format!("{} [Lyrics].{}", format_title, codec.ext())
 									)
-									.with_text(codec_description)
+									.with_text(codec.ext())
 							)
 						);
 					}
 					tr
-				})
+				}) /* .with_child(
+					xml::XmlNode::new("tr")
+						.with_child(xml::XmlNode::new("td").with_text("Lyrics"))
+						.with_child({
+							let codec = lyric::TextCodec::Txt;
+							xml::XmlNode::new("td").with_child(
+								xml::XmlNode::new("a")
+									.with_attribute("href", format!("lyrics.{}", codec.ext()))
+									.with_attribute(
+										"download",
+										format!("{} [Lyrics].{}", format_title, codec.ext())
+									)
+									.with_text(codec.description())
+							)
+						})
+						.with_child(
+							xml::XmlNode::new("td").with_child(
+								xml::XmlNode::new("a")
+									.with_attribute("href", "lyrics/")
+									.with_text("Other formats")
+							)
+						)
+				) */
 		)
 	}
 	let html = xml::XmlNode::new("html")

@@ -18,15 +18,15 @@
 }
 
 body {
-	font-family: "Public Sans", system-ui, sans-serif;
-	color: white;
-	background: black;
-	margin: 0;
-	font-size: 18px;
 	--bg: black;
 	--fg: white;
 	--gray: gray;
 	--acc: yellow;
+	font-family: "Public Sans", system-ui, sans-serif;
+	margin: 0;
+	font-size: 18px;
+	color: var(--fg);
+	background: var(--bg);
 	--full-width: 64rem;
 	--left-width: 20rem;
 	--right-width: 41rem;
@@ -37,6 +37,8 @@ body {
 	}
 	margin-bottom: 8rem;
 }
+/*
+back when remixes were collected into remix collections. maybe one day i'll want this css again
 remix-collection {
 	border-left: solid 1px #444;
 	display: block;
@@ -53,7 +55,7 @@ remix-collection {
 		transform-origin: left;
 		position: absolute;
 	}
-}
+} */
 a-song {
 	display: block;
 	padding: 0.125rem 0;
@@ -102,7 +104,7 @@ an-assist {
 			display: block;
 			width: 2.75rem;
 			height: 2.75rem;
-			margin-right: 1.5rem;
+			margin-right: 1.25rem;
 			user-select: none;
 		}
 	}
@@ -205,6 +207,16 @@ a {
 	&:hover {
 		text-decoration: underline;
 	}
+	&.external::after {
+		content: url("icons/external.svg");
+		width: 1rem;
+		height: 1rem;
+		display: inline-block;
+		margin-left: 0.5rem;
+	}
+	&.external:hover::after {
+		filter: brightness(135%);
+	}
 }
 
 header {
@@ -215,7 +227,7 @@ header {
 	header-content {
 		height: 14rem;
 		background: #00000000;
-		backdrop-filter: blur(2rem);
+		backdrop-filter: blur(4rem) saturate(150%);
 		border: solid 1px #ffffff33;
 		padding: 4rem;
 		width: min(var(--full-width), 40rem);
@@ -232,7 +244,7 @@ header {
 			font-size: 5.875rem;
 			margin: 0;
 			font-family: "Clash Display", sans-serif;
-			font-weight: 400;
+			font-weight: 350;
 			line-height: 100%;
 		}
 		p {
@@ -289,10 +301,6 @@ header {
 	0% {scale: 1.2;}
 }
 
-mobile-header {
-	display: none;
-}
-
 @media (max-width: 64rem) {
 	body {
 		font-size: 2vh;
@@ -344,7 +352,7 @@ mobile-header {
 		h1 {
 			font-family: "Clash Display", sans-serif;
 			margin: 0;
-			font-weight: 400;
+			font-weight: 350;
 			line-height: 100%;
 			font-size: 5rem;
 			margin-top: 2rem;
@@ -360,7 +368,7 @@ mobile-header {
 		display: none;
 	}
 }
-@media (min-width: 45rem) and (max-width: 64rem) {
+@media (min-width: 45rem) and (max-width: 63.99rem) {
 	body {
 		--left-width: calc((var(--full-width) - 2rem) * 0.4);
 		--right-width: calc((var(--full-width) - 2rem) * 0.6 - 2rem);
@@ -372,6 +380,15 @@ mobile-header {
 		}
 	}
 	footer {
+		display: none;
+	}
+}
+@media (min-width: 64rem) {
+	an-album.extra-border {
+		border: solid 0px #444;
+		border-width: 1px 0;
+	}
+	mobile-header {
 		display: none;
 	}
 }

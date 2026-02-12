@@ -96,18 +96,15 @@ pub struct Palette {
 	accent: Color
 }
 impl Palette {
-	pub fn home_page_album_additional_styles(&self) -> &'static str {
-		match &self.background {
-			bg if bg.lightness() < 0.002 => "border: solid 0px #444; border-width: 1px 0;",
-			_ => ""
-		}
+	pub fn home_page_album_needs_borders(&self) -> bool {
+		self.background.lightness() < 0.002
 	}
 	pub fn style_tag(&self) -> String {
 		format!(":root{{{}}}", self.style_text())
 	}
 	pub fn style_text(&self) -> String {
 		format!(
-			"--bg:{};--fg:{};--acc:{};--gray:{};",
+			"--bg:{};--fg:{};--acc:{};--gray:{}",
 			self.background, self.foreground, self.accent, self.gray
 		)
 	}
@@ -122,24 +119,43 @@ impl Palette {
 		}
 	}
 	pub fn from(val: &serde_json::Value, url_set: &url::UrlSet) -> Palette {
-		let obj = globals::map_with_only_these_keys(val, "Color", &["foreground", "background", "accent", "mode"]);
-		let fg_val = obj
-			.get("foreground")
-			.unwrap_or_else(|| panic!("\"color\" from JSON has no \"foreground\" attribute: {}", val));
-		let fg_str = fg_val
-			.as_str()
-			.unwrap_or_else(|| panic!("\"foreground\" (\"color\") from JSON is not a string: {}", fg_val));
-		let bg_val = obj
-			.get("background")
-			.unwrap_or_else(|| panic!("\"color\" from JSON has no \"background\" attribute: {}", val));
-		let bg_str = bg_val
-			.as_str()
-			.unwrap_or_else(|| panic!("\"background\" (\"color\") from JSON is not a string: {}", bg_val));
+		let obj = globals::map_with_only_these_keys(
+			val,
+			"Color",
+			&["foreground", "background", "accent", "mode"]
+		);
+		let fg_val = obj.get("foreground").unwrap_or_else(|| {
+			panic!(
+				"\"color\" from JSON has no \"foreground\" attribute: {}",
+				val
+			)
+		});
+		let fg_str = fg_val.as_str().unwrap_or_else(|| {
+			panic!(
+				"\"foreground\" (\"color\") from JSON is not a string: {}",
+				fg_val
+			)
+		});
+		let bg_val = obj.get("background").unwrap_or_else(|| {
+			panic!(
+				"\"color\" from JSON has no \"background\" attribute: {}",
+				val
+			)
+		});
+		let bg_str = bg_val.as_str().unwrap_or_else(|| {
+			panic!(
+				"\"background\" (\"color\") from JSON is not a string: {}",
+				bg_val
+			)
+		});
 		let acc_val = obj
 			.get("accent")
 			.unwrap_or_else(|| panic!("\"color\" from JSON has no \"accent\" attribute: {}", val));
 		let acc_str = acc_val.as_str().unwrap_or_else(|| {
-			panic!("\"accent\" (\"color\") from JSON is not a string: {}", acc_val)
+			panic!(
+				"\"accent\" (\"color\") from JSON is not a string: {}",
+				acc_val
+			)
 		});
 		let palette_mode = match obj.get("mode") {
 			None => PaletteMode::Normal,

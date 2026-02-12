@@ -1,5 +1,5 @@
-use crate::icons;
 use crate::color;
+use crate::icons;
 
 macro_rules! define_urlset {
 	(
@@ -8,7 +8,8 @@ macro_rules! define_urlset {
 			$field:ident,
 			$short:expr,
 			$required_substring:expr,
-			[ $( $color:expr ),* $(,)? ];
+			$main_color:expr,
+			[ $( $extra_color:expr ),* $(,)? ];
 		)*
 	) => {
 		fn assert_is_url(s: &str) {
@@ -59,26 +60,31 @@ macro_rules! define_urlset {
 					$( $field: get_str(&obj, $label, $required_substring), )*
 				}
 			}
-
+			pub fn try_to_get_at_least_one_link(&self) -> Option<&str> {
+				$(
+					if let Some(url) = &self.$field {
+						return Some(&url);
+					}
+				)*
+				None
+			}
 			pub fn entries(&self) -> Vec<(&'static str, &String, &'static str, &'static str)> {
 				let mut out = Vec::new();
 				$(
 					if let Some(v) = &self.$field {
-						let mut need_a_color = true;
-						$(
-							#[allow(unused_assignments)] // TODO there has to be a better way to select the first
-							if need_a_color {
-								out.push(($label, v, $short, { // doing this at runtime for every .entries() call feels excessive. precompilation where r u
-									let white = color::Color(255, 255, 255);
-									if color::Color::from($color).contrast(&white) > 3.0 {
-										"withwhite"
-									} else {
-										"withblack"
-									}
-								}));
-								need_a_color = false;
+						out.push((
+							$label,
+							v,
+							$short,
+							{
+								let white = color::Color(255, 255, 255);
+								if color::Color::from($main_color).contrast(&white) > 3.0 {
+									"withwhite"
+								} else {
+									"withblack"
+								}
 							}
-						)*
+						))
 					}
 				)*
 				out
@@ -101,8 +107,9 @@ macro_rules! define_urlset {
 				let mut out = Vec::new();
 				$(
 					if self.$field.is_some() {
+						out.push(($label, color::Color::from($main_color)));
 						$(
-							out.push(($label, color::Color::from($color)));
+							out.push(($label, color::Color::from($extra_color)));
 						)*
 					}
 				)*
@@ -116,20 +123,11 @@ macro_rules! define_urlset {
 				)*
 			}
 			pub fn platform_shorts_and_main_colors() -> Vec<(&'static str, color::Color)> {
-				let mut out = Vec::new();
-				$(
-					#[allow(unused_assignments)] // TODO there has to be a better way to select the first
-					{
-						let mut need_a_color = true;
-						$(
-							if need_a_color {
-								out.push(($short, color::Color::from($color)));
-								need_a_color = false;
-							}
-						)*
-					}
-				)*
-				out
+				vec![
+					$(
+						($short, color::Color::from($main_color)),
+					)*
+				]
 			}
 			pub fn linkpage_css_for_platforms() -> String {
 				let mut the_string = String::new();
@@ -144,22 +142,20 @@ macro_rules! define_urlset {
 
 #[rustfmt::skip]
 define_urlset! {
-	"Bandcamp",         bandcamp,         "bandcamp",       "bandcamp.com",     ["#1da0c3"];
-	"YouTube",          youtube,          "youtube",        "youtube.com",      ["#ff0000"];
-	"YouTube Full Mix", youtube_full_mix, "youtubefullmix", "youtube.com",      ["#ff0000"];
-	"Apple Music",      apple_music,      "applemusic",     "music.apple.com",  ["#ff2950", "#ff4e6b", "#ff0335"];
-	"Spotify",          spotify,          "spotify",        "open.spotify.com", ["#1ed760"];
-	"Soundcloud",       soundcloud,       "soundcloud",     "soundcloud.com",   ["#ff5001", "#fe7500", "#ff3701"];
-	"Amazon Music",     amazon_music,     "amazonmusic",    "music.amazon.com", ["#25d3da"];
-	"iHeartRadio",      iheartradio,      "iheartradio",    "iheart.com",       ["#c6002b"];
-	"Deezer",           deezer,           "deezer",         "deezer.com",       ["#a238ff"];
-	"Pandora",          pandora,          "pandora",        "pandora.com",      ["#1b86f6", "#3160f9", "#00a0ee"];
-	"Tidal",            tidal,            "tidal",          "tidal.com",        ["#33ffee"];
-	"Tencent Music",    tencent_music,    "tencentmusic",   "tencentmusic.com", ["#1772f9"];
+	// Name             struct field      svg + css name    url substring       color      other colors to check for contrast (namely gradients)
+	"Bandcamp",         bandcamp,         "bandcamp",       "bandcamp.com",     "#1da0c3", [];
+	"YouTube",          youtube,          "youtube",        "youtube.com",      "#ff0000", [];
+	"YouTube Full Mix", youtube_full_mix, "youtubefullmix", "youtube.com",      "#ff0000", [];
+	"Apple Music",      apple_music,      "applemusic",     "music.apple.com",  "#ff2950", ["#ff4e6b", "#ff0335"];
+	"Spotify",          spotify,          "spotify",        "open.spotify.com", "#1ed760", [];
+	"Soundcloud",       soundcloud,       "soundcloud",     "soundcloud.com",   "#ff5001", ["#fe7500", "#ff3701"];
+	"Amazon Music",     amazon_music,     "amazonmusic",    "music.amazon.com", "#25d3da", [];
+	"iHeartRadio",      iheartradio,      "iheartradio",    "iheart.com",       "#c6002b", [];
+	"Deezer",           deezer,           "deezer",         "deezer.com",       "#a238ff", [];
+	"Pandora",          pandora,          "pandora",        "pandora.com",      "#1b86f6", ["#3160f9", "#00a0ee"];
+	"Tidal",            tidal,            "tidal",          "tidal.com",        "#33ffee", [];
+	"Tencent Music",    tencent_music,    "tencentmusic",   "tencentmusic.com", "#1772f9", [];
 }
 
 // ^ These icons are a subset of those provided by icons.rs
 // These have additional information such as color, url patterns, and display names
-
-// Don't forget to add new platforms to linkpage-style.css. WISHLIST
-// ^^ check the hover states for those url buttons. they might not be optimal

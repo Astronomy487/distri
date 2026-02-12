@@ -101,6 +101,10 @@ fn distri_encode(build_r2_bucket: bool, build_static_website: bool) {
 	}
 
 	if build_r2_bucket {
+		assert!(
+			globals::PANIC_ON_MISSING_LYRICS,
+			"Cannot encode right now because missing lyrics will not panic; change globals::PANIC_ON_MISSING_LYRICS and recompile"
+		);
 		for album in &all_albums {
 			album.try_encode(&all_albums);
 		}
@@ -151,14 +155,34 @@ fn distri_encode(build_r2_bucket: bool, build_static_website: bool) {
 
 		globals::log_3("Building", "", "Other web assets", globals::ANSI_BLUE);
 		// album art jpgs
-		fileops::copy_recursive(
-			&std::path::Path::new(globals::filezone())
+		{
+			let mut artwork_that_needs_copying = std::collections::HashSet::new();
+			for album in &all_albums {
+				let _ = artwork_that_needs_copying.insert(album.slug.clone());
+				for song in &album.songs {
+					if !song.bonus && let Some(art) = &song.artwork {
+						let _ = artwork_that_needs_copying.insert(art.clone());
+					}
+				}
+			}
+			for remix in &all_remixes {
+				if let Some(art) = &remix.artwork {
+					// remixes aren't supposed to have artwork. whatever that's not my job
+					let _ = artwork_that_needs_copying.insert(art.clone());
+				}
+			}
+			let src_dir = std::path::Path::new(globals::filezone())
 				.join("private")
-				.join("jpg"),
-			&std::path::Path::new(globals::filezone())
+				.join("jpg");
+			let dest_dir = std::path::Path::new(globals::filezone())
 				.join("music.astronomy487.com")
-				.join("artwork")
-		);
+				.join("artwork");
+			for name in artwork_that_needs_copying {
+				let src = src_dir.join(&name).with_extension("jpg");
+				let dest = dest_dir.join(&name).with_extension("jpg");
+				let _ = std::fs::copy(&src, &dest).expect("Couldn't copy JPG artwork");
+			}
+		}
 		// linkpage styles
 		fileops::write_file(
 			&std::path::Path::new(globals::filezone())
@@ -166,7 +190,8 @@ fn distri_encode(build_r2_bucket: bool, build_static_website: bool) {
 				.join("style")
 				.with_extension("css"),
 			css::compress_css(
-				include_str!("assets/linkpage-style.css").to_owned() + &url::UrlSet::linkpage_css_for_platforms()
+				include_str!("assets/linkpage-style.css").to_owned()
+					+ &url::UrlSet::linkpage_css_for_platforms()
 			)
 		);
 		// fonts
@@ -363,7 +388,13 @@ fn distri_help() {
 			globals::ANSI_PURPLE
 		)
 	] {
-		println!("distri {}{:<11}{}{}", color, command, globals::ANSI_RESET, description);
+		println!(
+			"distri {}{:<11}{}{}",
+			color,
+			command,
+			globals::ANSI_RESET,
+			description
+		);
 	}
 }
 

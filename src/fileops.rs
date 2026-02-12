@@ -44,24 +44,6 @@ impl Zipper {
 	}
 }
 
-pub fn copy_recursive(from: &std::path::Path, to: &std::path::Path) {
-	if from.is_dir() {
-		std::fs::create_dir_all(to).expect("Can't perform copy");
-		for maybe_entry in std::fs::read_dir(from).expect("Can't perform copy") {
-			let entry = maybe_entry.expect("Can't perform copy");
-			let src_path = entry.path();
-			let dst_path = to.join(entry.file_name());
-			if src_path.is_dir() {
-				copy_recursive(&src_path, &dst_path);
-			} else {
-				let _ = std::fs::copy(&src_path, &dst_path).expect("Couldn't perform copy");
-			}
-		}
-	} else {
-		let _ = std::fs::copy(from, to).expect("Couldn't perform copy");
-	}
-}
-
 pub fn clear_directory(path: &std::path::Path) {
 	for maybe_entry in std::fs::read_dir(path)
 		.unwrap_or_else(|e| panic!("Failed to read directory {}: {}", path.display(), e))

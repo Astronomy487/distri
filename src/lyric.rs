@@ -1,24 +1,34 @@
-use crate::globals;
 use crate::language;
+
+const MAX_LINE_LENGTH: usize = 100;
+const MAX_LINE_LENGTH_FOR_SRT: usize = 50;
+
+const LYRIC_FILL_FORWARDS_MARGIN_SECONDS: f32 = 1.0;
+
+const CARE_ABOUT_VOCALIST: bool = false;
 
 #[derive(Debug)]
 pub enum TextCodec {
 	Txt,
 	Srt,
-	Lrc
+	Lrc,
+	Vtt,
+	Tsv
 }
 impl TextCodec {
 	pub fn ext(&self) -> &'static str {
 		match self {
 			TextCodec::Txt => "txt",
 			TextCodec::Srt => "srt",
-			TextCodec::Lrc => "lrc"
+			TextCodec::Lrc => "lrc",
+			TextCodec::Vtt => "vtt",
+			TextCodec::Tsv => "tsv"
 		}
 	}
 }
 
-fn parse_time(raw: &str, line: &str, text: &str) -> f32 {
-	let mut split = raw.split('.');
+fn parse_time(raw_text: &str, line: &str, text: &str) -> f32 {
+	let mut split = raw_text.split('.');
 	let maybe_whole = split.next();
 	let maybe_frac = split.next();
 	let valid = matches!((maybe_whole, maybe_frac, split.next()),
@@ -31,12 +41,12 @@ fn parse_time(raw: &str, line: &str, text: &str) -> f32 {
 	assert!(
 		valid,
 		"Invalid timestamp format \"{}\" in lyric line \"{}\"\n\n{}",
-		raw, line, text
+		raw_text, line, text
 	);
-	let number = raw.parse::<f32>().unwrap_or_else(|_| {
+	let number = raw_text.parse::<f32>().unwrap_or_else(|_| {
 		panic!(
 			"Couldn't read timestamp \"{}\" in lyric line \"{}\"\n\n{}",
-			raw, line, text
+			raw_text, line, text
 		)
 	});
 	assert!(!number.is_nan());
@@ -110,10 +120,11 @@ impl Lyrics {
 							text
 						);
 						assert!(
-							the_text.chars().count() <= 100,
-							"Lyric line \"{}\" is too long ({} chars)\n\n{}",
+							the_text.chars().count() <= MAX_LINE_LENGTH,
+							"Lyric line \"{}\" is too long ({} chars > {})\n\n{}",
 							the_text,
 							the_text.len(),
+							MAX_LINE_LENGTH,
 							text
 						);
 						// vvv messy capitalization validation
@@ -164,21 +175,13 @@ impl Lyrics {
 											new_vocalist,
 											text
 										);
-										if new_vocalist.to_lowercase() == "unknown" {
-											globals::log_2(
-												"Warning",
-												format!(
-													"Vocalist should not be \"{}\"; vocalist unused for now",
-													new_vocalist
-												),
-												globals::ANSI_RED
-											);
-											globals::log_2(
-												"",
-												format!("Line: \"{}\"", the_text),
-												globals::ANSI_RED
-											);
-										}
+										assert!(
+											new_vocalist.to_lowercase() != "unknown"
+												|| !CARE_ABOUT_VOCALIST,
+											"Vocalist should not be \"{}\"\nLine: \"{}\"",
+											new_vocalist,
+											the_text
+										);
 										if let Some(old_vocalist) = vocalist_override
 											&& old_vocalist == new_vocalist
 										{
@@ -299,26 +302,6 @@ impl Lyrics {
 						ms % 1000
 					)
 				}
-				fn split_two_lines(line: &str) -> String {
-					const MAX: usize = 50;
-					if line.chars().count() <= MAX {
-						return line.to_string();
-					}
-					let char_indices: Vec<(usize, char)> = line.char_indices().collect();
-					let char_len = char_indices.len();
-					let mid_char = char_len / 2;
-					let mid_byte = char_indices[mid_char].0;
-					let maybe_right = line[mid_byte..].find(' ').map(|o| mid_byte + o);
-					let maybe_left = line[..mid_byte].rfind(' ');
-					let index = match (maybe_left, maybe_right) {
-						(_, Some(right)) if right.saturating_sub(mid_byte) <= 20 => right,
-						(Some(left), _) => left,
-						(_, Some(right)) => right,
-						_ => mid_byte
-					};
-					let (left, right) = line.split_at(index);
-					format!("{}\n{}", left.trim(), right.trim())
-				}
 				let lines: Vec<&LyricLine> = self.stanzas.iter().flatten().collect();
 
 				let mut out = Vec::new();
@@ -328,7 +311,7 @@ impl Lyrics {
 					let mut end = line.end;
 					if let Some(next) = lines.get(index + 1)
 						&& next.start > line.start
-						&& next.start - end < 1.0
+						&& next.start - end < LYRIC_FILL_FORWARDS_MARGIN_SECONDS
 					// if this one ends within 1.0s of the next starting, just join them together
 					{
 						end = next.start;
@@ -338,11 +321,68 @@ impl Lyrics {
 						counter,
 						format_time(line.start),
 						format_time(end),
-						split_two_lines(&line.text)
+						line.text
 					));
 					counter += 1;
 				}
 				out.join("\n")
+			}
+			TextCodec::Vtt => {
+				fn format_time(time: f32) -> String {
+					let ms = (time * 1000.0).round() as u64;
+					format!(
+						"{:02}:{:02}:{:02}.{:03}",
+						ms / 3_600_000,
+						(ms % 3_600_000) / 60_000,
+						(ms % 60_000) / 1000,
+						ms % 1000
+					)
+				}
+				let lines: Vec<&LyricLine> = self.stanzas.iter().flatten().collect();
+
+				let mut out = vec!["WEBVTT".to_string()];
+				// let mut counter = 1;
+				for index in 0..lines.len() {
+					let line = lines[index];
+					let mut end = line.end;
+					if let Some(next) = lines.get(index + 1)
+						&& next.start > line.start
+						&& next.start - end < LYRIC_FILL_FORWARDS_MARGIN_SECONDS
+					// if this one ends within 1.0s of the next starting, just join them together
+					{
+						end = next.start;
+					}
+					out.push(format!(
+						"{} --> {}\n<v {}>{}",
+						// counter,
+						format_time(line.start),
+						format_time(end),
+						line.vocalist,
+						line.text
+					));
+					// counter += 1;
+				}
+				out.join("\n\n")
+			}
+			TextCodec::Tsv => {
+				let mut out = vec![
+					"Start (seconds)\tEnd (seconds)\tLanguage (ISO 639-1)\tVocalist\tText"
+						.to_string(),
+				];
+				for stanza in &self.stanzas {
+					for line in stanza {
+						out.push(format!(
+							"{:.6}\t{:.6}\t{}\t{}\t{}",
+							line.start,
+							line.end,
+							line.language.iso_639_1(),
+							line.vocalist,
+							line.text
+						));
+					}
+					out.push(String::new());
+				}
+				out.join("\n").trim().to_string()
 			}
 		}
 	}
@@ -381,7 +421,7 @@ struct LyricLine {
 	end: f32,
 	text: String,
 	language: language::Language,
-	vocalist: String
+	vocalist: String // see constant CARE_ABOUT_VOCALIST: bool
 }
 impl LyricLine {
 	fn start_ms(&self) -> u32 {

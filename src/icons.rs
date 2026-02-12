@@ -38,7 +38,9 @@ define_icons!(
 	"bandcamp",
 	"deezer",
 	"discord",
+	"external",
 	"github",
+	"greenheart",
 	"iheartradio",
 	"pandora",
 	"rss",
@@ -48,6 +50,5 @@ define_icons!(
 	"tidal",
 	"twitter",
 	"youtube",
-	"youtubefullmix",
-	"greenheart"
+	"youtubefullmix"
 );

@@ -30,6 +30,7 @@ impl Date {
 		if !is_leap && month == 2 && day == 29 {
 			bad_date();
 		}
+		assert!(year > 1582, "Date {} possibly predates the Gregorian calendar; I'm not doing all that", yyyy_mm_dd);
 		Date { year, month, day }
 	}
 	pub fn weekday_name(&self) -> &'static str {
@@ -173,20 +174,4 @@ impl Date {
 	pub fn birthday(&self) -> bool {
 		self.month == 12 && self.day == 5
 	}
-}
-
-pub fn all_ascending_all_descending(dates: &[Date]) -> (bool, bool) {
-	let mut all_ascending = true;
-	let mut all_descending = true;
-	for window in dates.windows(2) {
-		let r0 = &window[0];
-		let r1 = &window[1];
-		if r0 < r1 {
-			all_descending = false;
-		}
-		if r0 > r1 {
-			all_ascending = false;
-		}
-	}
-	(all_ascending, all_descending)
 }
