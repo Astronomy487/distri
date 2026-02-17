@@ -7,16 +7,9 @@ use crate::imagedeal;
 use crate::lyric;
 use crate::url;
 
-pub fn format_duration(total_seconds: u32) -> String {
-	let minutes = (total_seconds / 60) % 60;
-	let hours = (total_seconds / 3600) % 60;
-	let seconds = total_seconds % 60;
-	if hours > 0 {
-		format!("{}h{:02}m{:02}s", hours, minutes, seconds)
-	} else {
-		format!("{}m{:02}s", minutes, seconds)
-	}
-}
+/* TODO artist and title for Song, Album, and Assist should NOT have smartquotes in their actual field content */
+
+// TODO phase out .length in favor of duration_ms for Album and Song - take it straight from flac files! only ever render in terms of integer
 
 #[derive(Debug)]
 pub enum AudioCodec {
@@ -107,7 +100,7 @@ pub enum Titlable<'a> {
 	Album(&'a Album)
 }
 impl Titlable<'_> {
-	fn artist(&self) -> &str {
+	pub fn artist(&self) -> &str {
 		match self {
 			Titlable::Song(song) => &song.artist,
 			Titlable::Album(album) => &album.artist
@@ -119,7 +112,7 @@ impl Titlable<'_> {
 			Titlable::Album(album) => &album.palette
 		}
 	}
-	fn title(&self) -> &str {
+	pub fn title(&self) -> &str {
 		match self {
 			Titlable::Song(song) => &song.title,
 			Titlable::Album(album) => &album.title
@@ -245,7 +238,7 @@ impl Titlable<'_> {
 			format!("{} {} {}", self.artist(), self.dash(), self.title())
 		}
 	}
-	pub fn description(&self, all_albums: &[Album]) -> String {
+	pub fn brief_description(&self, all_albums: &[Album]) -> String {
 		match self {
 			Titlable::Album(album) => {
 				let released = album.released.to_display();
@@ -556,7 +549,7 @@ impl Album {
 				);
 			}
 		}
-		zipper.add_text_file(&self.description(), std::path::Path::new("README.txt"));
+		zipper.add_text_file(&self.readme(), std::path::Path::new("README.txt"));
 		zipper.add_file(
 			&std::path::Path::new(globals::filezone())
 				.join("private")
@@ -570,14 +563,14 @@ impl Album {
 	fn non_bonus_song_count(&self) -> usize {
 		self.songs.iter().take_while(|song| !song.bonus).count()
 	}
-	fn copyright_message(&self) -> String {
+	pub fn copyright_message(&self) -> String {
 		format!(
 			"© {} {}",
 			self.released.year,
 			self.artist.replace("Astro", "Astro \"astronomy487\"")
 		)
 	}
-	fn description(&self) -> String {
+	fn readme(&self) -> String {
 		// utf-8, but use ascii ' "
 		let mut text = Vec::new();
 
@@ -616,7 +609,7 @@ impl Album {
 		text.push(String::new());
 		text.push(self.copyright_message());
 		if self.artist == "Astro" {
-			text.push("Shared under CC BY-NC-SA 4.0 license".to_string());
+			text.push("Shared under CC BY-NC-SA 4.0 license. For more information, please visit https://creativecommons.org/licenses/by-nc-sa/4.0/.".to_string());
 		}
 		text.push("Thank you for downloading!".to_string());
 		text.push(format!("https://music.astronomy487.com/{}/", self.slug));
@@ -1012,7 +1005,7 @@ impl Song {
 			.iter()
 			.find(|t| t.codec_params.sample_rate.is_some())
 			.expect("Symphonia couldn't process audio");
-		let sr = track
+		let sample_rate = track
 			.codec_params
 			.sample_rate
 			.expect("Symphonia couldn't identify audio sample rate");
@@ -1024,8 +1017,8 @@ impl Song {
 			.codec_params
 			.n_frames
 			.expect("Symphonia couldn't identify audio length");
-		let dur_seconds = (frames as f64 / f64::from(sr)).floor() as u32;
-		let dur_milliseconds = ((frames * 1000) as f64 / f64::from(sr)).floor() as u32;
+		let dur_seconds = (frames as f64 / f64::from(sample_rate)).floor() as u32;
+		let dur_milliseconds = ((frames * 1000) as f64 / f64::from(sample_rate)).floor() as u32;
 		assert!(
 			dur_seconds == self.length,
 			"JSON reports that {} has length {}, but it has length {}",
@@ -1034,9 +1027,9 @@ impl Song {
 			dur_seconds
 		);
 		assert!(
-			sr >= 44_100,
+			sample_rate >= 44_100,
 			"Expected 44.1 kHz (or higher), but file has {} Hz",
-			sr
+			sample_rate
 		);
 		assert!(
 			bit_depth >= 16,
@@ -1567,4 +1560,15 @@ pub fn get_music_data(json_path: &std::path::Path) -> (Vec<Album>, Vec<Song>, Ve
 	);
 
 	(all_albums, all_remixes, all_assists)
+}
+
+pub fn format_duration(total_seconds: u32) -> String {
+	let minutes = (total_seconds / 60) % 60;
+	let hours = (total_seconds / 3600) % 60;
+	let seconds = total_seconds % 60;
+	if hours > 0 {
+		format!("{}h{:02}m{:02}s", hours, minutes, seconds)
+	} else {
+		format!("{}m{:02}s", minutes, seconds)
+	}
 }

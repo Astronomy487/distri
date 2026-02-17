@@ -9,6 +9,7 @@ macro_rules! define_urlset {
 			$short:expr,
 			$required_substring:expr,
 			$main_color:expr,
+			$with_color:expr,
 			[ $( $extra_color:expr ),* $(,)? ];
 		)*
 	) => {
@@ -76,14 +77,7 @@ macro_rules! define_urlset {
 							$label,
 							v,
 							$short,
-							{
-								let white = color::Color(255, 255, 255);
-								if color::Color::from($main_color).contrast(&white) > 3.0 {
-									"withwhite"
-								} else {
-									"withblack"
-								}
-							}
+							$with_color
 						))
 					}
 				)*
@@ -142,19 +136,19 @@ macro_rules! define_urlset {
 
 #[rustfmt::skip]
 define_urlset! {
-	// Name             struct field      svg + css name    url substring       color      other colors to check for contrast (namely gradients)
-	"Bandcamp",         bandcamp,         "bandcamp",       "bandcamp.com",     "#1da0c3", [];
-	"YouTube",          youtube,          "youtube",        "youtube.com",      "#ff0000", [];
-	"YouTube Full Mix", youtube_full_mix, "youtubefullmix", "youtube.com",      "#ff0000", [];
-	"Apple Music",      apple_music,      "applemusic",     "music.apple.com",  "#ff2950", ["#ff4e6b", "#ff0335"];
-	"Spotify",          spotify,          "spotify",        "open.spotify.com", "#1ed760", [];
-	"Soundcloud",       soundcloud,       "soundcloud",     "soundcloud.com",   "#ff5001", ["#fe7500", "#ff3701"];
-	"Amazon Music",     amazon_music,     "amazonmusic",    "music.amazon.com", "#25d3da", [];
-	"iHeartRadio",      iheartradio,      "iheartradio",    "iheart.com",       "#c6002b", [];
-	"Deezer",           deezer,           "deezer",         "deezer.com",       "#a238ff", [];
-	"Pandora",          pandora,          "pandora",        "pandora.com",      "#1b86f6", ["#3160f9", "#00a0ee"];
-	"Tidal",            tidal,            "tidal",          "tidal.com",        "#33ffee", [];
-	"Tencent Music",    tencent_music,    "tencentmusic",   "tencentmusic.com", "#1772f9", [];
+	// Name             struct field      svg + css name    url substring       color      withcolor    other colors to check for contrast (namely gradients)
+	"Bandcamp",         bandcamp,         "bandcamp",       "bandcamp.com",     "#1da0c3", "white", [];
+	"YouTube",          youtube,          "youtube",        "youtube.com",      "#ff0000", "white", [];
+	"YouTube Full Mix", youtube_full_mix, "youtubefullmix", "youtube.com",      "#ff0000", "white", [];
+	"Apple Music",      apple_music,      "applemusic",     "music.apple.com",  "#ff2950", "white", ["#ff4e6b", "#ff0335"];
+	"Spotify",          spotify,          "spotify",        "open.spotify.com", "#1ed760", "black", [];
+	"Soundcloud",       soundcloud,       "soundcloud",     "soundcloud.com",   "#ff5001", "white", ["#fe7500", "#ff3701"];
+	"Amazon Music",     amazon_music,     "amazonmusic",    "music.amazon.com", "#25d3da", "black", [];
+	"iHeartRadio",      iheartradio,      "iheartradio",    "iheart.com",       "#c6002b", "white", [];
+	"Deezer",           deezer,           "deezer",         "deezer.com",       "#a238ff", "black", [];
+	"Pandora",          pandora,          "pandora",        "pandora.com",      "#1b86f6", "white", ["#3160f9", "#00a0ee"];
+	"Tidal",            tidal,            "tidal",          "tidal.com",        "#ffffff", "black", [];
+	"Tencent Music",    tencent_music,    "tencentmusic",   "tencentmusic.com", "#1772f9", "white", [];
 }
 
 // ^ These icons are a subset of those provided by icons.rs

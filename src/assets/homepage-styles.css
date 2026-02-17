@@ -20,7 +20,7 @@
 body {
 	--bg: black;
 	--fg: white;
-	--gray: gray;
+	--gray: #757575;
 	--acc: yellow;
 	font-family: "Public Sans", system-ui, sans-serif;
 	margin: 0;
@@ -36,6 +36,9 @@ body {
 		&:nth-child(3n+3) {--acc: magenta;}
 	}
 	margin-bottom: 8rem;
+}
+html, body {
+	overflow-x: hidden;
 }
 /*
 back when remixes were collected into remix collections. maybe one day i'll want this css again
@@ -145,10 +148,16 @@ an-album {
 					margin-top: 1rem;
 					font-size: 0.75em;
 					color: var(--gray);
-					line-height: 150%;
+					line-height: 125%;
 				}
 				margin-left: 3rem;
 				width: var(--right-width);
+				h3 {
+					color: var(--gray);
+					font-size: 1rem;
+					font-weight: inherit;
+					margin: 0;
+				}
 				h2 {
 					font-size: 2.5rem;
 					margin: 0;
@@ -179,6 +188,7 @@ an-album {
 								width: 2rem;
 								color: var(--acc);
 								flex-shrink: 0;
+								user-select: none;
 							}
 							tracklist-item-title {
 								display: inline-block;
@@ -213,11 +223,32 @@ a {
 		height: 1rem;
 		display: inline-block;
 		margin-left: 0.5rem;
+		margin-right: 0.25rem;
 	}
 	&.external:hover::after {
 		filter: brightness(135%);
+		animation: 0.2s external-bounce;
 	}
 }
+
+@keyframes external-bounce {
+	20% {
+		margin-left: 0.4rem;
+		margin-right: 0.35rem;
+	}
+	50% {
+		margin-left: 0.6rem;
+		margin-right: 0.15rem;
+	}
+}
+
+/* @keyframes header-in {
+	from {
+		scale: 1.1;
+		filter: blur(1rem);
+		opacity: 0;
+	}
+} */
 
 header {
 	position: relative;
@@ -225,9 +256,10 @@ header {
 	overflow: hidden;
 	padding: 18rem 0;
 	header-content {
+		/* animation: 1s header-in; */
 		height: 14rem;
 		background: #00000000;
-		backdrop-filter: blur(4rem) saturate(150%);
+		backdrop-filter: blur(3rem) saturate(150%);
 		border: solid 1px #ffffff33;
 		padding: 4rem;
 		width: min(var(--full-width), 40rem);
@@ -279,7 +311,7 @@ header {
 				}
 				&:hover img {
 					filter: grayscale(100%) brightness(10000%);
-					animation: 0.2s icon-hover;
+					animation: 0.8s icon-hover;
 				}
 			}
 		}
@@ -291,14 +323,24 @@ header {
 		pointer-events: none;
 		a-rhombus {
 			position: absolute;
-			transition: opacity 1s;
 			z-index: -1;
+			transition: 1s;
+			&[data-state="1"] {
+				opacity: 1;
+				scale: 1;
+			}
+			&[data-state="0"] {
+				opacity: 0;
+				scale: 0.8;
+			}
 		}
 	}
 }
 
 @keyframes icon-hover {
-	0% {scale: 1.2;}
+	0% {scale: 1.3;}
+	10% {scale: 0.85 1.3;}
+	20% {scale: 1.08 0.92;}
 }
 
 @media (max-width: 64rem) {
@@ -307,7 +349,6 @@ header {
 		--full-width: calc(100vw);
 		--left-width: calc(var(--full-width) - 2rem);
 		--right-width: calc(var(--full-width) - 2rem);
-		overflow-x: hidden;
 		margin-bottom: 0;
 	}
 	rhombus-container {
@@ -395,9 +436,21 @@ header {
 
 footer {
 	width: var(--full-width);
-	margin: 4rem auto;
+	margin: 8rem auto;
 	color: var(--gray);
+	text-align: center;
 }
 .bday:hover::after {
 	content: " !";
+}
+
+@keyframes hoverheart {
+	0% {transform: rotate(0deg);}
+	6% {transform: rotate(10deg);}
+	12% {transform: rotate(-10deg);}
+	18% {transform: rotate(5deg);}
+	24% {transform: rotate(0deg);}
+}
+#hoverheart {
+	animation: 2s hoverheart infinite;
 }

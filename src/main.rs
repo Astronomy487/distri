@@ -14,7 +14,7 @@
 #![allow(clippy::needless_range_loop)]
 
 mod color;
-mod css;
+mod minify;
 mod date;
 mod fileops;
 mod genre;
@@ -31,6 +31,7 @@ mod rss;
 mod smartquotes;
 mod url;
 mod wrangle;
+mod duration;
 mod xml;
 
 fn main() {
@@ -88,6 +89,7 @@ fn distri_encode(build_r2_bucket: bool, build_static_website: bool) {
 			let _ = remix.grab_artwork_data(imagedeal::ImageCodec::Jpg);
 			// let _ = remix.grab_artwork_data(imagedeal::ImageCodec::Png);
 		}
+		let _ = imagedeal::grab_artwork_data(globals::FALLBACK_ARTWORK_NAME.to_string(), imagedeal::ImageCodec::Jpg);
 	} else {
 		for album in &all_albums {
 			imagedeal::check_artwork(album.slug.clone());
@@ -98,6 +100,7 @@ fn distri_encode(build_r2_bucket: bool, build_static_website: bool) {
 		for remix in &all_remixes {
 			remix.check_artwork();
 		}
+		imagedeal::check_artwork(globals::FALLBACK_ARTWORK_NAME.to_string());
 	}
 
 	if build_r2_bucket {
@@ -157,6 +160,7 @@ fn distri_encode(build_r2_bucket: bool, build_static_website: bool) {
 		// album art jpgs
 		{
 			let mut artwork_that_needs_copying = std::collections::HashSet::new();
+			let _ = artwork_that_needs_copying.insert(globals::FALLBACK_ARTWORK_NAME.to_owned());
 			for album in &all_albums {
 				let _ = artwork_that_needs_copying.insert(album.slug.clone());
 				for song in &album.songs {
@@ -177,10 +181,17 @@ fn distri_encode(build_r2_bucket: bool, build_static_website: bool) {
 			let dest_dir = std::path::Path::new(globals::filezone())
 				.join("music.astronomy487.com")
 				.join("artwork");
+			std::fs::create_dir(&dest_dir).unwrap_or_else(|_| {
+				panic!(
+					"Couldn't create directory music.astronomy487.com/artwork"
+				)
+			});
 			for name in artwork_that_needs_copying {
 				let src = src_dir.join(&name).with_extension("jpg");
 				let dest = dest_dir.join(&name).with_extension("jpg");
-				let _ = std::fs::copy(&src, &dest).expect("Couldn't copy JPG artwork");
+				let _ = std::fs::copy(&src, &dest).unwrap_or_else(|_|
+					panic!("Couldn't copy JPG artwork {}", name)
+				);
 			}
 		}
 		// linkpage styles
@@ -189,7 +200,7 @@ fn distri_encode(build_r2_bucket: bool, build_static_website: bool) {
 				.join("music.astronomy487.com")
 				.join("style")
 				.with_extension("css"),
-			css::compress_css(
+			minify::compress_css(
 				include_str!("assets/linkpage-style.css").to_owned()
 					+ &url::UrlSet::linkpage_css_for_platforms()
 			)

@@ -23,7 +23,7 @@ pub fn make_link_page(
 	let palette = titlable.palette();
 	let released = titlable.released();
 	let length = titlable.length();
-	let description = titlable.description(all_albums);
+	let description = titlable.brief_description(all_albums);
 	let format_title = titlable.format_title();
 	let format_title_short = titlable.format_title_short();
 	let open_graph_artwork = match titlable.artwork() {
@@ -261,7 +261,7 @@ pub fn make_link_page(
 		.maybe_with_child(display_artwork.map(|the_display_artwork| {
 			xml::XmlNode::new("img")
 				.with_attribute("src", the_display_artwork)
-				.with_attribute("alt", &format_title_short)
+				.with_attribute("alt", "") // left empty because this is decorative
 		}))
 		.with_child(
 			xml::XmlNode::new("h1").with_text(smartquotes::smart_quotes(&format_title_short))
@@ -300,7 +300,7 @@ pub fn make_link_page(
 							xml::XmlNode::new("a")
 								.with_attribute(
 									"class",
-									format!("{} streamlink {}", short, with_color)
+									format!("{} streamlink with{}", short, with_color)
 								)
 								.with_attribute("href", value.to_string())
 								.with_child(

@@ -25,3 +25,24 @@ pub fn compress_css<T: Into<String>>(original: T) -> String {
 	text = text.replace(";}", "}");
 	text.trim().to_string()
 }
+
+pub fn compress_js<T: Into<String>>(original: T) -> String {
+	original.into()
+	// sorry ! no js compression 4 u! (it's totally fine)
+	
+    /*
+	// i tried out this library and it just always panics. what r we doing
+	let input = original.into();
+    let session = better_minify_js::Session::new();
+    let mut out = Vec::new();
+
+    better_minify_js::minify(
+        &session,
+        better_minify_js::TopLevelMode::Global,
+        input.as_bytes(),
+        &mut out,
+    )
+    .expect("JS minification failed");
+
+    String::from_utf8(out).expect("Minifier produced invalid UTF-8") */
+}

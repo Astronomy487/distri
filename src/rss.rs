@@ -72,7 +72,7 @@ pub fn make_rss(
 	}
 	rss_entries_to_make.reverse(); // ensure any date-ties are actually newest-to-oldest
 	rss_entries_to_make.sort_by(|a, b| b.1.cmp(a.1)); // sort by release date
-	let mut to_show = 25;
+	let mut to_show = 35;
 	for (rss_item, _date) in rss_entries_to_make {
 		channel.add_child(rss_item);
 		to_show -= 1;
@@ -250,7 +250,7 @@ fn rss_item_for_assist(assist: &musicdata::Assist) -> xml::XmlNode {
 				.maybe_with_attribute("type", {
 					if assist.artwork.ends_with(".png") {
 						Some("image/png")
-					} else if assist.artwork.ends_with(".png") {
+					} else if assist.artwork.ends_with(".jpg") {
 						Some("image/jpeg")
 					} else {
 						globals::log_2(

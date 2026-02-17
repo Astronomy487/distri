@@ -32,15 +32,16 @@ I write "you" as if anybody other than me is expected to execute this program
 
 - make sure synced lyric data actually makes it to USLT in mp3s; the audio players i own have failed me and i'm suspicious
 - anything marked TODO or WISHLIST
-- fix icons to actually be brand-guidelines-compliant
-	- currently, i have a single-color version that gets recolored fully white or fully black as needed
-	- this is not standards compliant; the triangle on YouTube logo should be white on the red, not empty on the red. same for black in Spotify logo
-	- we need separate svgs for each of white, black, and color
-		- on not-hover, present the one that matches the current palette mode
-		- on hover, present white if withwhite or present black if withblack
 
 ### changelog
 
+- v0.6.0
+	- minor fixes to logos/icons
+	- bouncier icons (squash && stretch)
+	- random homepage tweaks, minor css animations
+	- remove unused dependencies itertools, rayon, and sha2. i forget why they were there. goodbye!
+	- `compute_slug` now turns em/en dashes into hyphens
+		- global.rs now has a test function. i should use test functions more often
 - v0.5.0
 	- added icon for external links on home page (assets/icon/external.svg)
 	- `Album` attribute `about` is now an `Option<Vec<String>>` instead of a `Option<String>`, so paragraphs are already separated. whitespace is validated. the original discog.json still has \n\n

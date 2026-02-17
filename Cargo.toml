@@ -1,6 +1,6 @@
 [package]
 name = "distri"
-version = "0.5.0"
+version = "0.6.0"
 edition = "2024"
 readme = "README.md"
 
@@ -8,14 +8,11 @@ readme = "README.md"
 symphonia = { version = "0.5", default-features = false, features = ["flac"] }
 id3 = { version = "1.16.3", default-features = false }
 image = { version = "0.25", default-features = false, features = ["png", "jpeg"] }
-itertools = { version = "0.14.0", default-features = false }
 metaflac = { version = "0.2.8", default-features = false }
 regex = { version = "1.12.2", default-features = false, features = ["unicode-perl"] }
 serde_json = { version = "1.0", default-features = false, features = ["std"] }
 unicode-normalization = { version = "0.1.25", default-features = false }
 zip = { version = "0.6", default-features = false, features = ["deflate"] }
-sha2 = { version = "0.10.9", default-features = false }
-rayon = { version = "1.11.0", default-features = false }
 
 [profile.release]
 opt-level = "z"

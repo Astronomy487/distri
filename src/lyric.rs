@@ -3,7 +3,7 @@ use crate::language;
 const MAX_LINE_LENGTH: usize = 100;
 const MAX_LINE_LENGTH_FOR_SRT: usize = 50;
 
-const LYRIC_FILL_FORWARDS_MARGIN_SECONDS: f32 = 1.0;
+const LYRIC_FILL_FORWARDS_MARGIN_SECONDS: f32 = 0.0; // i never know what's best
 
 const CARE_ABOUT_VOCALIST: bool = false;
 

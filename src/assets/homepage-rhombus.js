@@ -2,13 +2,14 @@ let rhombusColors = ["cyan", "yellow", "magenta"];
 {
 	function isThanksgiving(a=new Date){const b=a.getFullYear(),c=10,d=new Date(b,c,1),e=d.getDay();return a.getMonth()===c&&a.getDate()===1+(4-e+7)%7+21}
 	let theDate = new Date().getMonth()+1+"-"+new Date().getDate();
+	if (theDate == "2-14") rhombusColors = ["#E53935", "#F48FB1", "#FFFFFF"];
 	if (theDate == "3-17") rhombusColors = ["#169B62", "#FF883E", "#FFFFFF"];
 	if (theDate == "3-31") rhombusColors = ["#3BBEFA", "#F589D8", "#FFFFFF"];
+	if (theDate == "6-19") rhombusColors = ["#ce1126", "#fcd116", "#006b3f"];
 	if (theDate == "7-4") rhombusColors = ["#FFFFFF", "#224CE2", "#E52F29"];
 	if (theDate == "10-31") rhombusColors = ["#E36622", "#666666", "#9315C1"];
-	if (theDate == "12-25") rhombusColors = ["#FFFFFF", "#46903A", "#D93344"];
 	if (isThanksgiving()) rhombusColors = ["#E67E22", "#76471B", "#F1C40F"];
-	if (theDate == "2-14") rhombusColors = ["#E53935", "#F48FB1", "#FFFFFF"];
+	if (theDate == "12-25") rhombusColors = ["#FFFFFF", "#46903A", "#D93344"];
 }
 
 const TRI_WIDTH = 50;
@@ -43,7 +44,6 @@ function createRhombus(template, baseX, baseY) {
 
 	const state = Math.random() < 0.1 ? 1 : 0;
 	el.dataset.state = state;
-	el.style.opacity = state;
 
 	rhombusSets[state].add(el);
 
@@ -94,7 +94,6 @@ function swapRhombus(state, el) {
 
 	const next = 1 - state;
 
-	el.style.opacity = next;
 	el.dataset.state = next;
 
 	fromSet.delete(el);

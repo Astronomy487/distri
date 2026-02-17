@@ -108,10 +108,10 @@ pub fn compute_slug(artist: &str, title: &str) -> String {
 	slug = slug.replace("a$tro", "astro"); // i love kesha
 	let re_punct = regex::Regex::new(r#"[()\[\],.?!'"*\$]"#).expect("re_punct is invalid regex");
 	let re_sep = regex::Regex::new(r#"[_/&+:;\s]+"#).expect("re_sep is invalid regex");
-	let re_dash = regex::Regex::new(r#"-+"#).expect("re_dash is invalid regex");
+	let re_dash = regex::Regex::new(r#"[-~–—]+"#).expect("re_dash is invalid regex");
+	slug = re_dash.replace_all(&slug, "-").into_owned();
 	slug = re_punct.replace_all(&slug, "").into_owned();
 	slug = re_sep.replace_all(&slug, "-").into_owned();
-	slug = re_dash.replace_all(&slug, "-").into_owned();
 	slug = slug.chars().filter(char::is_ascii).collect();
 	while slug.starts_with('-') {
 		slug = slug[1..].to_string();
@@ -119,6 +119,12 @@ pub fn compute_slug(artist: &str, title: &str) -> String {
 	while slug.ends_with('-') {
 		slug = slug[..slug.len() - 1].to_string();
 	}
+	// TODO optimize this lmao
+	slug = slug.replace("--", "-");
+	slug = slug.replace("--", "-");
+	slug = slug.replace("--", "-");
+	slug = slug.replace("--", "-");
+	slug = slug.replace("--", "-");
 	slug = slug.replace("--", "-");
 	assert!(
 		slug.chars()
@@ -129,6 +135,14 @@ pub fn compute_slug(artist: &str, title: &str) -> String {
 		slug
 	);
 	slug
+}
+
+#[test]
+fn slugs_are_right() {
+	assert_eq!(
+		compute_slug("underscores", "Girls and boys—but secretly, you'd love to know what it's like, wouldn't you?"),
+		"underscores-girls-and-boys-but-secretly-youd-love-to-know-what-its-like-wouldnt-you"
+	)
 }
 
 pub fn check_custom_slug(slug: &str) {

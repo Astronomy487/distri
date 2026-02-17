@@ -1,4 +1,4 @@
-use crate::css;
+use crate::minify;
 use crate::date;
 use crate::globals;
 use crate::icons;
@@ -68,6 +68,7 @@ fn song_xml(
 									xml::XmlNode::new("img")
 										.with_attribute("src", "icons/greenheart.svg")
 										.with_attribute("style", "margin-left: 0.5rem; height: 1.25rem; margin-top: -0.125rem; user-select: none; vertical-align: middle;")
+										.with_attribute("id", "hoverheart")
 								});
 							}
 							span
@@ -162,7 +163,7 @@ pub fn make_home_page(
 		)
 		.with_child(xml::XmlNode::new("title").with_text("Astro"))
 		.with_child(
-			xml::XmlNode::new("style").with_text_unescaped(css::compress_css(include_str!(
+			xml::XmlNode::new("style").with_text_unescaped(minify::compress_css(include_str!(
 				"assets/homepage-styles.css"
 			)))
 		);
@@ -196,7 +197,7 @@ pub fn make_home_page(
 										("Twitter", "twitter", "https://twitter.com/astronomy487/"),
 										("Discord", "discord", "https://discord.gg/ZnMsetP"),
 										("GitHub", "github", "https://github.com/Astronomy487"),
-										("RSS Feed", "rss", "https://music.astronomy487.com/rss.xml"),
+										("RSS Feed", "rss", "rss.xml"),
 									].chunks(2) {
 										let mut tr = xml::XmlNode::new("tr");
 										for (link_name, icon_name, url) in chunk {
@@ -327,15 +328,34 @@ pub fn make_home_page(
 												)
 											}
 										)
+										/* .with_child(xml::XmlNode::new("br"))
+										.with_child(
+											xml::XmlNode::new("span")
+												.with_text(album.copyright_message())
+												.with_attribute("style", "width: 100%;")
+										) */
 								)
 								.with_child({
 									let mut column = xml::XmlNode::new("a-column")
+										.maybe_with_child(
+											if album.artist == "Astro" {
+												None
+											} else {
+												Some(xml::XmlNode::new("h3")
+													.with_text(
+														smartquotes::smart_quotes(&album.artist)
+													)
+												)
+											}
+										)
 										.with_child(
 											xml::XmlNode::new("h2")
 												.with_child(
 													xml::XmlNode::new("a")
 														.with_attribute("href", format!("{}/", album.slug))
-														.with_text(album.format_title_short())
+														.with_text(
+															smartquotes::smart_quotes(&album.title)
+														)
 												)
 										);
 									if let Some(text) = &album.about {
@@ -557,16 +577,20 @@ pub fn make_home_page(
 				) */
 				.with_child(
 					xml::XmlNode::new("div")
-						.with_text(format!("© {} Astro “astronomy487”", date::Date::today().year))
+						.with_text(format!("© {} Astro", date::Date::today().year))
+				)
+				.with_child(
+					xml::XmlNode::new("img")
+						.with_attribute("src", "https://astronomy487.com/logo/assets/cmy-big.svg")
+						.with_attribute("style", "width: 2rem; height: 2rem; user-select: none; margin-top: 1rem;")
+						// .with_attribute("style", "margin: 3rem auto; display: block; width: 2rem; height: 2rem; user-select: none;")
 				)
 		)
 		.with_child(
 			xml::XmlNode::new("script")
 				.with_text_unescaped(
-					concat!(
-						include_str!("assets/homepage-rhombus-min.js"),
-						include_str!("assets/homepage-css-nuke.js")
-					)
+					minify::compress_js(include_str!("assets/homepage-rhombus.js"))
+					+ &minify::compress_js(include_str!("assets/homepage-css-nuke.js"))
 				)
 		)
 	;

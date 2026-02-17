@@ -58,7 +58,7 @@ h1 {
 	color: var(--bg);
 }
 
-img {
+body > img {
 	width: 100%;
 	user-select: none;
 }
@@ -125,28 +125,34 @@ table {
 		outline: none;
 		img {
 			filter: var(--icon-filter);
-			animation: 0.2s icon-hover;
+			animation: 0.8s icon-hover;
 		}
 	}
 }
 
-@keyframes icon-hover {
-	0% {scale: 1.12;}
+@keyframes icon-hover { /* TODO do i want? */
+	0% {scale: 1.3;}
+	10% {scale: 0.9 1.2;}
+	20% {scale: 1.1 0.9;}
 }
 
 .mode-black .streamlink:not(:hover) {
 	color: black;
-	border-color: black;
 	img {
 		filter: var(--icon-filter-black);
 	}
 }
 .mode-white .streamlink:not(:hover) {
 	color: white;
-	border-color: white;
 	img {
 		filter: var(--icon-filter-white);
 	}
+}
+.mode-black .streamlink {
+	border-color: black;
+}
+.mode-white .streamlink {
+	border-color: white;
 }
 
 a:not(.streamlink) {
