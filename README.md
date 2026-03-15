@@ -12,7 +12,8 @@ It expects the current working directory to contain the following four folders:
 In the source folder, it expects
 
 - `source/audio`, flacs of every song (albums in folders)
-- `source/image`, 3000x3000 PNGs of album/single artwork
+- `source/artwork`, 3000x3000 PNGs of album/single artwork and their captions
+- `source/88x31`, 88x31 gifs to be associated with albums
 - `source/lyrics`, lyric tsvs
 - `source/discog.json`, a JSON of all music data, as described in [[discog format.md]]. a version of this is shown at [[discog-example.json]] (no guarantee of updating, this just exists as an example)
 
@@ -30,11 +31,32 @@ I write "you" as if anybody other than me is expected to execute this program
 
 ## wishlist before it's ready for actual use
 
-- make sure synced lyric data actually makes it to USLT in mp3s; the audio players i own have failed me and i'm suspicious
 - anything marked TODO or WISHLIST
+- make sure synced lyric data actually makes it to USLT in mp3s; the audio players i own have failed me and i'm suspicious
+- get rid of "Unknown" vocalists once and for all
+- standardize songs with multiple artists to always use commas instead of ampersand. i don't like ampersand
+- go back into your lyrics - whenever many people sing at once, you should just pick one as the primary and mark that for lyrics
 
 ### changelog
 
+- v0.7.0
+	- song/album durations are now read from the .flac sources at validation time, instead of included in discog.json
+	- durations are now managed by the `Duration` type in duration.rs
+	- source/artwork (formlerly source/image) and source/lyrics now have folders for each album, just like source/audio expects
+	- `globals::filezone()` now gives a `PathBuf` instead of a `&'static str`. this is nicer i think
+	- link pages css has been cleaned up; three sections are now tables identified with classes: .metadata, .streamlinks, .bottom
+	- link pages' download links now have an icon! it even bounces boioioioioing
+	- add lyric webpages. sync play along!
+	- rework lyric vocalists to store Rc<Vec<String>> instead of just a string. saves on a lil memory probably makes cloning faster
+		- several vocalists are now indicated by several `vocalist:` entries in source lyrics tsvs
+	- remixes can have artwork now. idk if i'll ever go through and do that. but partial participation is totally supported so it's chill
+	- colored scrollbars because firefox supports that now
+	- artwork is no longer passed as strings (sometimes-but-not-always with a parent folder for the album). `Artwork` struct exists (yay!)
+		- alt="" and aria-hidden="true" strictly followed for decorative items
+		- artwork (which is non-decorative!) will always come with alt text; `source/artwork` now requires txt caption files
+	- make modules hierarchical for better organization (imo)
+	- upcs and isrcs now have their own types, `UPC` and `ISRC`
+	- albums can now have cute little 88x31 gifs
 - v0.6.0
 	- minor fixes to logos/icons
 	- bouncier icons (squash && stretch)

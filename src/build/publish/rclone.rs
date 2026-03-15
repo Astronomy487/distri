@@ -3,7 +3,7 @@ use crate::globals;
 pub fn audio_astronomy487_com() {
 	globals::log_2("Publishing", "audio.astronomy487.com", globals::ANSI_PURPLE);
 
-	let local_path = std::path::Path::new(globals::filezone())
+	let local_path = globals::filezone()
 		.join("audio.astronomy487.com")
 		.to_string_lossy()
 		.to_string();

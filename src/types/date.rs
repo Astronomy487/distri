@@ -1,10 +1,11 @@
 #[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Debug)]
 // fields are lexicographically ordered! magic
 pub struct Date {
-	pub year: u32,
-	pub month: u32, // 1 = january
-	pub day: u32
+	pub year: u16,
+	pub month: u8, // 1 = january
+	pub day: u8
 }
+
 impl Date {
 	pub fn from(yyyy_mm_dd: &str) -> Date {
 		let bad_format = || -> ! {
@@ -30,12 +31,16 @@ impl Date {
 		if !is_leap && month == 2 && day == 29 {
 			bad_date();
 		}
-		assert!(year > 1582, "Date {} possibly predates the Gregorian calendar; I'm not doing all that", yyyy_mm_dd);
+		assert!(
+			year > 1582,
+			"Date {} possibly predates the Gregorian calendar; I'm not doing all that",
+			yyyy_mm_dd
+		);
 		Date { year, month, day }
 	}
 	pub fn weekday_name(&self) -> &'static str {
-		const LEADING_VALUES: [u32; 12] = [0, 3, 2, 5, 0, 3, 5, 1, 4, 6, 2, 4];
-		let year = if (self.month as i32) < 3 {
+		const LEADING_VALUES: [u16; 12] = [0, 3, 2, 5, 0, 3, 5, 1, 4, 6, 2, 4];
+		let year = if i32::from(self.month) < 3 {
 			self.year - 1
 		} else {
 			self.year
@@ -43,7 +48,7 @@ impl Date {
 		match (year + year / 4 - year / 100
 			+ year / 400
 			+ LEADING_VALUES[(self.month - 1) as usize]
-			+ self.day)
+			+ u16::from(self.day))
 			% 7
 		{
 			0 => "Sun",

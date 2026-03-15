@@ -7,7 +7,7 @@ pub fn music_astronomy487_com() {
 		.arg("pages")
 		.arg("deploy")
 		.arg(
-			std::path::Path::new(globals::filezone())
+			globals::filezone()
 				.join("music.astronomy487.com")
 				.to_string_lossy()
 				.to_string()

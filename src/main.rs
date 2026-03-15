@@ -2,39 +2,27 @@
 #![warn(unused_mut, unused_results, unused_variables, unused_imports)]
 #![deny(unsafe_code, unused_unsafe)]
 #![deny(unreachable_code, unreachable_patterns)]
-#![allow(dead_code)]
+#![allow(dead_code)] // i re-enable this every once in a while just to see what's up
 #![deny(private_interfaces)]
 #![deny(absolute_paths_not_starting_with_crate)]
 #![deny(clippy::unwrap_used)]
-#![deny(clippy::many_single_char_names)]
+#![warn(clippy::many_single_char_names)]
 #![deny(clippy::shadow_reuse, clippy::shadow_same, clippy::shadow_unrelated)]
 #![deny(clippy::cast_lossless)]
 #![warn(clippy::manual_assert)]
-#![allow(clippy::too_many_lines)]
-#![allow(clippy::needless_range_loop)]
 
-mod color;
-mod minify;
-mod date;
+// #![deny(missing_docs, clippy::missing_docs_in_private_items)]
+
 mod fileops;
-mod genre;
 mod globals;
-mod homepage;
-mod icons;
-mod imagedeal;
-mod language;
-mod linkpage;
-mod lyric;
-mod musicdata;
-mod rclone;
-mod rss;
-mod smartquotes;
-mod url;
-mod wrangle;
-mod duration;
-mod xml;
+
+mod build;
+mod media;
+mod types;
 
 fn main() {
+	let runtime = std::time::SystemTime::now();
+
 	set_panic_hook();
 	check_if_can_run();
 
@@ -45,8 +33,7 @@ fn main() {
 	}
 	let allowed = ["publish", "validate", "encode", "build", "clean"];
 	if args.iter().any(|a| !allowed.contains(&a.as_str())) {
-		distri_help();
-		return;
+		return distri_help();
 	}
 	let only = |s: &str| args.len() == 1 && args[0] == s;
 	if only("clean") {
@@ -60,54 +47,33 @@ fn main() {
 		if encode || build || valid {
 			distri_encode(encode, build);
 		} else {
-			distri_help();
+			return distri_help();
 		}
+	}
+
+	if let Ok(elapsed) = runtime.elapsed() {
+		let duration = crate::types::duration::Duration::from_milliseconds(
+			(elapsed.as_secs_f32() * 1_000.0) as u32
+		);
+		println!(
+			"{}Ran in {}{}",
+			globals::ANSI_GRAY,
+			duration.display(),
+			globals::ANSI_RESET
+		);
 	}
 }
 fn distri_encode(build_r2_bucket: bool, build_static_website: bool) {
 	let just_validating = !build_r2_bucket && !build_static_website;
 
-	let json_location = std::path::Path::new(globals::filezone())
+	let json_location = globals::filezone()
 		.join("source")
 		.join("discog")
 		.with_extension("json");
 
-	let (all_albums, all_remixes, all_assists) = musicdata::get_music_data(&json_location);
-
-	// Check that all album artwork is where it needs to be
-	globals::log_2("Locating", "Artwork", globals::ANSI_GREEN);
-	if !just_validating {
-		for album in &all_albums {
-			let _ = imagedeal::grab_artwork_data(album.slug.clone(), imagedeal::ImageCodec::Jpg);
-			let _ = imagedeal::grab_artwork_data(album.slug.clone(), imagedeal::ImageCodec::Png);
-			for song in &album.songs {
-				let _ = song.grab_artwork_data(imagedeal::ImageCodec::Jpg);
-				// let _ = song.grab_artwork_data(imagedeal::ImageCodec::Png);
-			}
-		}
-		for remix in &all_remixes {
-			let _ = remix.grab_artwork_data(imagedeal::ImageCodec::Jpg);
-			// let _ = remix.grab_artwork_data(imagedeal::ImageCodec::Png);
-		}
-		let _ = imagedeal::grab_artwork_data(globals::FALLBACK_ARTWORK_NAME.to_string(), imagedeal::ImageCodec::Jpg);
-	} else {
-		for album in &all_albums {
-			imagedeal::check_artwork(album.slug.clone());
-			for song in &album.songs {
-				song.check_artwork();
-			}
-		}
-		for remix in &all_remixes {
-			remix.check_artwork();
-		}
-		imagedeal::check_artwork(globals::FALLBACK_ARTWORK_NAME.to_string());
-	}
+	let (all_albums, all_remixes, all_assists) = crate::media::get_music_data(&json_location);
 
 	if build_r2_bucket {
-		assert!(
-			globals::PANIC_ON_MISSING_LYRICS,
-			"Cannot encode right now because missing lyrics will not panic; change globals::PANIC_ON_MISSING_LYRICS and recompile"
-		);
 		for album in &all_albums {
 			album.try_encode(&all_albums);
 		}
@@ -117,8 +83,7 @@ fn distri_encode(build_r2_bucket: bool, build_static_website: bool) {
 	}
 
 	if build_static_website {
-		let music_astronomy487_com =
-			std::path::Path::new(globals::filezone()).join("music.astronomy487.com");
+		let music_astronomy487_com = globals::filezone().join("music.astronomy487.com");
 		if music_astronomy487_com.exists() {
 			fileops::clear_directory(&music_astronomy487_com);
 		} else {
@@ -126,21 +91,21 @@ fn distri_encode(build_r2_bucket: bool, build_static_website: bool) {
 				.unwrap_or_else(|_| panic!("Couldn't create directory music.astronomy487.com"));
 		}
 
-		globals::log_3("Building", "", "Home page", globals::ANSI_BLUE);
-		homepage::make_home_page(&all_albums, &all_remixes, &all_assists);
+		globals::log_2("Building", "Home page", globals::ANSI_BLUE);
+		crate::build::pages::homepage::make_home_page(&all_albums, &all_remixes, &all_assists);
 
-		globals::log_3("Building", "", "Link pages", globals::ANSI_BLUE);
+		globals::log_2("Building", "Link pages", globals::ANSI_BLUE);
 		for album in &all_albums {
-			linkpage::make_link_page(
-				&musicdata::Titlable::Album(album),
+			crate::build::pages::linkpage::make_link_page(
+				&crate::media::titlable::Titlable::Album(album),
 				&all_albums,
 				build_r2_bucket
 			);
 			if !album.single {
 				for song in &album.songs {
 					if !song.bonus {
-						linkpage::make_link_page(
-							&musicdata::Titlable::Song(song),
+						crate::build::pages::linkpage::make_link_page(
+							&crate::media::titlable::Titlable::Song(song),
 							&all_albums,
 							build_r2_bucket
 						);
@@ -149,8 +114,8 @@ fn distri_encode(build_r2_bucket: bool, build_static_website: bool) {
 			}
 		}
 		for remix in &all_remixes {
-			linkpage::make_link_page(
-				&musicdata::Titlable::Song(remix),
+			crate::build::pages::linkpage::make_link_page(
+				&crate::media::titlable::Titlable::Song(remix),
 				&all_albums,
 				build_r2_bucket
 			);
@@ -159,12 +124,16 @@ fn distri_encode(build_r2_bucket: bool, build_static_website: bool) {
 		globals::log_3("Building", "", "Other web assets", globals::ANSI_BLUE);
 		// album art jpgs
 		{
-			let mut artwork_that_needs_copying = std::collections::HashSet::new();
-			let _ = artwork_that_needs_copying.insert(globals::FALLBACK_ARTWORK_NAME.to_owned());
+			use crate::media::artwork::Artwork;
+			let mut artwork_that_needs_copying: std::collections::HashSet<Artwork> =
+				std::collections::HashSet::new();
+			let _ = artwork_that_needs_copying.insert(Artwork::fallback());
 			for album in &all_albums {
-				let _ = artwork_that_needs_copying.insert(album.slug.clone());
+				let _ = artwork_that_needs_copying.insert(album.artwork.clone());
 				for song in &album.songs {
-					if !song.bonus && let Some(art) = &song.artwork {
+					if !song.bonus
+						&& let Some(art) = &song.artwork
+					{
 						let _ = artwork_that_needs_copying.insert(art.clone());
 					}
 				}
@@ -175,39 +144,82 @@ fn distri_encode(build_r2_bucket: bool, build_static_website: bool) {
 					let _ = artwork_that_needs_copying.insert(art.clone());
 				}
 			}
-			let src_dir = std::path::Path::new(globals::filezone())
-				.join("private")
-				.join("jpg");
-			let dest_dir = std::path::Path::new(globals::filezone())
+			let dest_dir = globals::filezone()
 				.join("music.astronomy487.com")
 				.join("artwork");
 			std::fs::create_dir(&dest_dir).unwrap_or_else(|_| {
-				panic!(
-					"Couldn't create directory music.astronomy487.com/artwork"
-				)
+				panic!("Couldn't create directory music.astronomy487.com/artwork")
 			});
-			for name in artwork_that_needs_copying {
-				let src = src_dir.join(&name).with_extension("jpg");
-				let dest = dest_dir.join(&name).with_extension("jpg");
-				let _ = std::fs::copy(&src, &dest).unwrap_or_else(|_|
-					panic!("Couldn't copy JPG artwork {}", name)
-				);
+			for artwork in artwork_that_needs_copying {
+				artwork.make_jpg_exist();
+				let dest = dest_dir
+					.join(&artwork.name_without_slash)
+					.with_extension("jpg");
+				let _ = std::fs::copy(artwork.jpg_path, &dest).unwrap_or_else(|_| {
+					panic!(
+						"Couldn't copy artwork {}.jpg for site",
+						artwork.name_with_slash
+					)
+				});
+			}
+		}
+		// 8831
+		{
+			let dest_dir = globals::filezone()
+				.join("music.astronomy487.com")
+				.join("8831");
+			std::fs::create_dir(&dest_dir).unwrap_or_else(|_| {
+				panic!("Couldn't create directory music.astronomy487.com/8831")
+			});
+			for album in &all_albums {
+				if album.has_8831 {
+					let dest = dest_dir.join(&album.slug).with_extension("gif");
+					let _ = std::fs::copy(
+						globals::filezone()
+							.join("source")
+							.join("8831")
+							.join(&album.slug)
+							.with_extension("gif"),
+						&dest
+					)
+					.unwrap_or_else(|_| panic!("Couldn't copy 8831 {}.gif for site", album.slug));
+				}
 			}
 		}
 		// linkpage styles
 		fileops::write_file(
-			&std::path::Path::new(globals::filezone())
+			&globals::filezone()
 				.join("music.astronomy487.com")
-				.join("style")
+				.join("linkpage-style")
 				.with_extension("css"),
-			minify::compress_css(
+			crate::build::minify::compress_css(
 				include_str!("assets/linkpage-style.css").to_owned()
-					+ &url::UrlSet::linkpage_css_for_platforms()
+					+ &crate::types::urlset::UrlSet::linkpage_css_for_platforms()
+			)
+		);
+		// lyricpage styles
+		fileops::write_file(
+			&globals::filezone()
+				.join("music.astronomy487.com")
+				.join("lyricpage-style")
+				.with_extension("css"),
+			crate::build::minify::compress_css(
+				include_str!("assets/lyricpage-style.css").to_owned()
+			)
+		);
+		// lyricpage js
+		fileops::write_file(
+			&globals::filezone()
+				.join("music.astronomy487.com")
+				.join("lyricpage-script")
+				.with_extension("js"),
+			crate::build::minify::compress_js(
+				include_str!("assets/lyricpage-script.js").to_owned()
 			)
 		);
 		// fonts
 		std::fs::create_dir(
-			std::path::Path::new(globals::filezone())
+			globals::filezone()
 				.join("music.astronomy487.com")
 				.join("font")
 		)
@@ -227,7 +239,7 @@ fn distri_encode(build_r2_bucket: bool, build_static_website: bool) {
 			)
 		] {
 			fileops::write_file(
-				&std::path::Path::new(globals::filezone())
+				&globals::filezone()
 					.join("music.astronomy487.com")
 					.join("font")
 					.join(font)
@@ -236,7 +248,7 @@ fn distri_encode(build_r2_bucket: bool, build_static_website: bool) {
 			);
 		}
 		// icons
-		icons::put_icons();
+		crate::build::icons::put_icons();
 		// others
 		for (name, data) in [
 			(
@@ -247,14 +259,14 @@ fn distri_encode(build_r2_bucket: bool, build_static_website: bool) {
 			("favicon.ico", include_bytes!("assets/favicon.ico").to_vec())
 		] {
 			fileops::write_file(
-				&std::path::Path::new(globals::filezone())
+				&globals::filezone()
 					.join("music.astronomy487.com")
 					.join(name),
 				data
 			);
 		}
 		/* fileops::write_file(
-			&std::path::Path::new(globals::filezone())
+			&globals::filezone()
 				.join("music.astronomy487.com")
 				.join("discog")
 				.with_extension("json"),
@@ -262,7 +274,13 @@ fn distri_encode(build_r2_bucket: bool, build_static_website: bool) {
 		); */
 
 		globals::log_3("Building", "", "RSS feed", globals::ANSI_BLUE);
-		rss::make_rss(&all_albums, &all_remixes, &all_assists);
+		crate::build::pages::rss::make_rss(&all_albums, &all_remixes, &all_assists);
+		globals::log_3("Building", "", "Sitemap", globals::ANSI_BLUE);
+		crate::build::pages::sitemap::make_sitemap(&all_albums, &all_remixes, &all_assists);
+	}
+
+	if just_validating {
+		println!("Validation was successful");
 	}
 }
 
@@ -312,7 +330,7 @@ fn distri_publish() {
 	println!("This will publish content to the internet.");
 	if globals::ask_to_continue() {
 		distri_encode(true, true);
-		wrangle::music_astronomy487_com();
+		crate::build::publish::wrangle::music_astronomy487_com();
 		// wrangler can be talkative - delete its extra directories
 		for dir_name in [".wrangler", "node_modules"] {
 			let dot_wrangler_folder = std::env::current_dir()
@@ -322,17 +340,16 @@ fn distri_publish() {
 				let _ = std::fs::remove_dir_all(dot_wrangler_folder);
 			}
 		}
-		rclone::audio_astronomy487_com();
+		crate::build::publish::rclone::audio_astronomy487_com();
 	}
 }
 
 fn distri_clean() {
-	let filezone = std::path::Path::new(globals::filezone());
+	let filezone = globals::filezone();
 	let dirs = [
 		"private/flac",
 		"private/mp3",
 		"private/jpg",
-		"private/png",
 		"audio.astronomy487.com/mp3",
 		"music.astronomy487.com",
 		"audio.astronomy487.com/flac"
@@ -412,7 +429,7 @@ fn distri_help() {
 fn check_if_can_run() {
 	let mut can_run = true;
 
-	url::UrlSet::check_valid_icons();
+	crate::types::urlset::UrlSet::check_valid_icons();
 
 	let mut missing_paths = Vec::new();
 	for directory in [
@@ -421,24 +438,20 @@ fn check_if_can_run() {
 		"private/flac",
 		"private/jpg",
 		"private/mp3",
-		"private/png",
 		"source/discog.json",
 		"source/audio",
-		"source/image",
+		"source/artwork",
+		"source/8831",
 		"source/lyrics"
 	] {
-		let path = std::path::Path::new(globals::filezone()).join(directory);
+		let path = globals::filezone().join(directory);
 		if !path.exists() {
 			missing_paths.push(directory);
 			can_run = false;
 		}
 	}
 	if !missing_paths.is_empty() {
-		globals::log_2(
-			"Using",
-			globals::filezone().replace("\\", "/"),
-			globals::ANSI_GREEN
-		);
+		globals::log_2("Using", globals::filezone().display(), globals::ANSI_GREEN);
 		for missing_path in &missing_paths {
 			globals::log_2(
 				"Missing",

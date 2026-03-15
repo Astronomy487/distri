@@ -1,18 +1,46 @@
+use crate::globals;
+use crate::types::date::Date;
+
 pub struct Zipper {
-	writer: zip::ZipWriter<std::fs::File>
+	writer: zip::ZipWriter<std::fs::File>,
+	date: Date,
+	final_destination: std::path::PathBuf,
+	temporary_destination: std::path::PathBuf
 }
 
 impl Zipper {
-	pub fn new(dest: &std::path::Path) -> Self {
-		let file = std::fs::File::create(dest)
+	pub fn new(dest: &std::path::Path, date: &Date) -> Self {
+		let final_destination = dest.to_path_buf();
+		let temporary_destination = globals::filezone().join("temp").with_extension("zip");
+		if temporary_destination.exists() {
+			std::fs::remove_dir_all(&temporary_destination)
+				.expect("Failed to remove existing temporary destination");
+		}
+		let file = std::fs::File::create(&temporary_destination)
 			.unwrap_or_else(|_| panic!("Failed to create destination zip {}", dest.display()));
 		let writer = zip::ZipWriter::new(file);
-		Zipper { writer }
+		Zipper {
+			writer,
+			date: date.clone(),
+			temporary_destination,
+			final_destination
+		}
 	}
 	pub fn add_file(&mut self, src: &std::path::Path, dest_in_zip: &std::path::Path) {
 		let options = zip::write::FileOptions::default()
 			.compression_method(zip::CompressionMethod::Deflated)
-			.unix_permissions(0o644);
+			.unix_permissions(0o644)
+			.last_modified_time(
+				zip::DateTime::from_date_and_time(
+					self.date.year,
+					self.date.month,
+					self.date.day,
+					12,
+					0,
+					0
+				)
+				.expect("Why isn't this a valid date")
+			);
 
 		self.writer
 			.start_file(dest_in_zip.to_string_lossy(), options)
@@ -25,7 +53,18 @@ impl Zipper {
 	pub fn add_text_file(&mut self, content: &str, dest_in_zip: &std::path::Path) {
 		let options = zip::write::FileOptions::default()
 			.compression_method(zip::CompressionMethod::Deflated)
-			.unix_permissions(0o644);
+			.unix_permissions(0o644)
+			.last_modified_time(
+				zip::DateTime::from_date_and_time(
+					self.date.year,
+					self.date.month,
+					self.date.day,
+					12,
+					0,
+					0
+				)
+				.expect("Why isn't this a valid date")
+			);
 
 		self.writer
 			.start_file(
@@ -41,6 +80,8 @@ impl Zipper {
 	}
 	pub fn finish(mut self) {
 		let _ = self.writer.finish().expect("Failed to finish ZIP archive");
+		std::fs::rename(&self.temporary_destination, &self.final_destination)
+			.expect("Failed to move ZIP archive into final destination");
 	}
 }
 

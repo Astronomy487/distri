@@ -1,5 +1,5 @@
-use crate::color;
-use crate::icons;
+use crate::build::icons;
+use crate::types::color::Color;
 
 macro_rules! define_urlset {
 	(
@@ -97,13 +97,13 @@ macro_rules! define_urlset {
 					)*
 				}
 			}
-			pub fn logo_colors_used(&self) -> Vec<(&'static str, color::Color)> {
+			pub fn logo_colors_used(&self) -> Vec<(&'static str, Color)> {
 				let mut out = Vec::new();
 				$(
 					if self.$field.is_some() {
-						out.push(($label, color::Color::from($main_color)));
+						out.push(($label, Color::from($main_color)));
 						$(
-							out.push(($label, color::Color::from($extra_color)));
+							out.push(($label, Color::from($extra_color)));
 						)*
 					}
 				)*
@@ -116,10 +116,10 @@ macro_rules! define_urlset {
 					}
 				)*
 			}
-			pub fn platform_shorts_and_main_colors() -> Vec<(&'static str, color::Color)> {
+			pub fn platform_shorts_and_main_colors() -> Vec<(&'static str, Color)> {
 				vec![
 					$(
-						($short, color::Color::from($main_color)),
+						($short, Color::from($main_color)),
 					)*
 				]
 			}

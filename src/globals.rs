@@ -1,13 +1,5 @@
-static FILEZONE: std::sync::OnceLock<&'static str> = std::sync::OnceLock::new();
-
-pub fn filezone() -> &'static str {
-	FILEZONE.get_or_init(|| {
-		let zone = std::env::current_dir()
-			.expect("Could not get the current working directory")
-			.to_string_lossy()
-			.into_owned();
-		Box::leak(zone.into_boxed_str()) // make FILEZONE's &str live forever
-	})
+pub fn filezone() -> std::path::PathBuf {
+	std::env::current_dir().expect("Could not get the current working directory")
 }
 
 pub fn is_in_path(exe: &str) -> bool {
@@ -36,10 +28,7 @@ pub const ANSI_CYAN: &str = "\x1b[96m"; // encoding
 pub const ANSI_BLUE: &str = "\x1b[94m"; // static site
 pub const ANSI_PURPLE: &str = "\x1b[95m"; // internet and publishing
 pub const ANSI_RESET: &str = "\x1b[0m";
-
-pub const FALLBACK_ARTWORK_NAME: &str = "fallback";
-
-pub static PANIC_ON_MISSING_LYRICS: bool = false;
+pub const ANSI_GRAY: &str = "\x1b[90m";
 
 // Particular to the Cloudflare pages project I use to host the static website
 pub const CF_PAGES_NAME: &str = "astronomy487-music";
@@ -119,13 +108,9 @@ pub fn compute_slug(artist: &str, title: &str) -> String {
 	while slug.ends_with('-') {
 		slug = slug[..slug.len() - 1].to_string();
 	}
-	// TODO optimize this lmao
-	slug = slug.replace("--", "-");
-	slug = slug.replace("--", "-");
-	slug = slug.replace("--", "-");
-	slug = slug.replace("--", "-");
-	slug = slug.replace("--", "-");
-	slug = slug.replace("--", "-");
+	while slug.contains("--") {
+		slug = slug.replace("--", "-");
+	}
 	assert!(
 		slug.chars()
 			.all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-'),
@@ -140,7 +125,10 @@ pub fn compute_slug(artist: &str, title: &str) -> String {
 #[test]
 fn slugs_are_right() {
 	assert_eq!(
-		compute_slug("underscores", "Girls and boys—but secretly, you'd love to know what it's like, wouldn't you?"),
+		compute_slug(
+			"underscores",
+			"Girls and boys—but secretly, you'd love to know what it's like, wouldn't you?"
+		),
 		"underscores-girls-and-boys-but-secretly-youd-love-to-know-what-its-like-wouldnt-you"
 	)
 }
@@ -153,3 +141,8 @@ pub fn check_custom_slug(slug: &str) {
 		slug
 	);
 }
+
+pub const OG_KEYWORDS: &str = "electronic, dance, music, astro, artist, indie, edm";
+pub const OG_AUTHOR: &str = "Astro, astronomy487";
+pub const OG_ROBOTS: &str = "index, follow";
+pub const OG_SITE_NAME: &str = "astronomy487.com";

@@ -16,7 +16,6 @@ an Album contains the following fields :
 - `artist`, a string for the artist of the album. if not present, artist is assumed to be "Astro"
 - `single`, a boolean indicating if this is a single. if so, this album has exactly 1 non-bonus song. the song's title and artist fields will match the album's. urls will probably only be supplied by the parent (but like, your code should check for song.url and use album.url as a fallback anyways. so)
 - `released` (required), a string in YYYY-MM-DD format for the release date of the album
-- `length` (required), the total length of the album (excluding bonus tracks) in seconds. may differ a little from the sum of song lengths because of rounding
 - `bcid`, a string identifier used for bandcamp album embeds
 - `url`, a Url object (more details below) that links to this album on various platforms
 - `genre` (required), a string representing the genre. see src/genre.rs for currently accepted genres
@@ -32,7 +31,6 @@ songs can either be remixes (found in `discog.remixes`) or non-remixes (found in
 
 - `title` (required), a string title for the song. a fully formatted song title should include artist ("[Artist] - [Title]").
 - `artist`, a string for the artist of the song. if not present, artist is assumed to be "Astro". remixers and featured artists are kept in the title. if a remix has no primary artist listed, then no artist should be presented in a fully formatted song title.
-- `length` (required), the length of the song in seconds
 - `released`, a string in YYYY-MM-DD format for the release date of the song. required for remixes; non-remixes may inherit release date from the parent album
 - `url`, a Url object (more details below) that links to the song on various platforms
 - `artwork`, artwork to represent a single song. either `true` if the location of single artwork is named after the song, or a string if it has some other name

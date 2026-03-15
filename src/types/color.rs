@@ -1,8 +1,8 @@
 use crate::globals;
-use crate::url;
+use crate::types::urlset::UrlSet;
 
 #[derive(Clone, Debug)]
-pub struct Color(pub u8, pub u8, pub u8);
+pub struct Color(u8, u8, u8);
 impl Color {
 	pub fn from(hex_code: &str) -> Color {
 		assert!(
@@ -75,6 +75,11 @@ impl Color {
 		}
 		self.lerp(high, other)
 	}
+	pub const CYAN: Color = Color(0, 255, 255);
+	pub const MAGENTA: Color = Color(255, 0, 255);
+	pub const YELLOW: Color = Color(255, 255, 0);
+	pub const WHITE: Color = Color(255, 255, 255);
+	pub const BLACK: Color = Color(0, 0, 0);
 }
 impl std::fmt::Display for Color {
 	fn fmt(&self, fmt: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -93,6 +98,7 @@ pub struct Palette {
 	foreground: Color,
 	background: Color,
 	gray: Color,
+	line: Color,
 	accent: Color
 }
 impl Palette {
@@ -104,8 +110,8 @@ impl Palette {
 	}
 	pub fn style_text(&self) -> String {
 		format!(
-			"--bg:{};--fg:{};--acc:{};--gray:{}",
-			self.background, self.foreground, self.accent, self.gray
+			"--bg:{};--fg:{};--acc:{};--gray:{};--line:{}",
+			self.background, self.foreground, self.accent, self.gray, self.line
 		)
 	}
 	pub fn html_theme_color(&self) -> String {
@@ -118,7 +124,7 @@ impl Palette {
 			PaletteMode::Black => Some("mode-black")
 		}
 	}
-	pub fn from(val: &serde_json::Value, url_set: &url::UrlSet) -> Palette {
+	pub fn from(val: &serde_json::Value, url_set: &UrlSet) -> Palette {
 		let obj = globals::map_with_only_these_keys(
 			val,
 			"Color",
@@ -178,25 +184,27 @@ impl Palette {
 		};
 		let foreground = Color::from(fg_str);
 		let background = Color::from(bg_str);
+		let accent = Color::from(acc_str);
+		assert!(
+			foreground.contrast(&background) >= 4.5,
+			"Foreground color {} has insufficient contrast with background color {}",
+			foreground,
+			background
+		);
+		assert!(
+			accent.contrast(&background) >= 3.0,
+			"Accent color {} has insufficient contrast with background color {}",
+			accent,
+			background
+		);
 		let palette = Palette {
 			gray: background.find_min_towards(&foreground, 4.5),
+			line: background.find_min_towards(&foreground, 3.0),
+			accent,
 			foreground,
 			background,
-			accent: Color::from(acc_str),
 			palette_mode
 		};
-		assert!(
-			palette.foreground.contrast(&palette.background) >= 4.5,
-			"Foreground color {} has insufficient contrast with background color {}",
-			palette.foreground,
-			palette.background
-		);
-		assert!(
-			palette.accent.contrast(&palette.background) >= 3.0,
-			"Accent color {} has insufficient contrast with background color {}",
-			palette.accent,
-			palette.background
-		);
 
 		let mut logo_colors_that_dont_pass: Vec<&'static str> = Vec::new();
 		for (platform, the_color) in url_set.logo_colors_used() {

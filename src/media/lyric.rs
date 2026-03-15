@@ -1,11 +1,10 @@
-use crate::language;
+use crate::build::smartquotes;
+use crate::build::xml::XmlNode;
+use crate::types::language::Language;
 
 const MAX_LINE_LENGTH: usize = 100;
-const MAX_LINE_LENGTH_FOR_SRT: usize = 50;
-
-const LYRIC_FILL_FORWARDS_MARGIN_SECONDS: f32 = 0.0; // i never know what's best
-
-const CARE_ABOUT_VOCALIST: bool = false;
+const MAX_LINE_LENGTH_FOR_SRT: usize = 65;
+const LYRIC_FILL_FORWARDS_MARGIN_SECONDS: f64 = 0.0; // i never know what's best
 
 #[derive(Debug)]
 pub enum TextCodec {
@@ -15,6 +14,13 @@ pub enum TextCodec {
 	Vtt,
 	Tsv
 }
+pub const ALL_TEXT_CODECS: [TextCodec; 5] = [
+	TextCodec::Txt,
+	TextCodec::Srt,
+	TextCodec::Lrc,
+	TextCodec::Vtt,
+	TextCodec::Tsv
+];
 impl TextCodec {
 	pub fn ext(&self) -> &'static str {
 		match self {
@@ -25,9 +31,18 @@ impl TextCodec {
 			TextCodec::Tsv => "tsv"
 		}
 	}
+	pub fn description(&self) -> &'static str {
+		match self {
+			TextCodec::Txt => "Plain text",
+			TextCodec::Srt => "SRT",
+			TextCodec::Lrc => "LRC",
+			TextCodec::Vtt => "VTT",
+			TextCodec::Tsv => "TSV"
+		}
+	}
 }
 
-fn parse_time(raw_text: &str, line: &str, text: &str) -> f32 {
+fn parse_time(raw_text: &str, line: &str, text: &str) -> f64 {
 	let mut split = raw_text.split('.');
 	let maybe_whole = split.next();
 	let maybe_frac = split.next();
@@ -43,7 +58,7 @@ fn parse_time(raw_text: &str, line: &str, text: &str) -> f32 {
 		"Invalid timestamp format \"{}\" in lyric line \"{}\"\n\n{}",
 		raw_text, line, text
 	);
-	let number = raw_text.parse::<f32>().unwrap_or_else(|_| {
+	let number = raw_text.parse::<f64>().unwrap_or_else(|_| {
 		panic!(
 			"Couldn't read timestamp \"{}\" in lyric line \"{}\"\n\n{}",
 			raw_text, line, text
@@ -59,6 +74,18 @@ pub struct Lyrics {
 	stanzas: Vec<Vec<LyricLine>>
 }
 impl Lyrics {
+	pub fn all_vocalist_sets(&self) -> Vec<&VocalistSet> {
+		let mut vocalist_sets: Vec<&VocalistSet> = Vec::new();
+		for stanza in &self.stanzas {
+			for line in stanza {
+				if !vocalist_sets.contains(&&line.vocalist_set) {
+					// && lol
+					vocalist_sets.push(&line.vocalist_set);
+				}
+			}
+		}
+		vocalist_sets
+	}
 	pub fn from(text: &str) -> Lyrics {
 		assert!(
 			!text.starts_with(char::is_whitespace),
@@ -70,8 +97,8 @@ impl Lyrics {
 			"Lyric text has untrimmed whitespace at end\n\n{}",
 			text
 		);
-		let mut last_lang: Option<language::Language> = None;
-		let mut last_vocalist: Option<String> = None;
+		let mut last_lang: Option<Language> = None;
+		let mut last_vocalist_set: Option<VocalistSet> = None;
 		let vvll: Vec<Vec<LyricLine>> = text
 			.replace("\r", "")
 			.split("\n\n")
@@ -143,14 +170,15 @@ impl Lyrics {
 							}
 						}
 
-						let mut language_override: Option<language::Language> = None;
-						let mut vocalist_override: Option<String> = None;
+						let mut language_override: Option<Language> = None;
+						let mut vocalist_set_override: Option<VocalistSet> = None;
 
+						let mut vocalists_collected_this_line: Vec<String> = Vec::new();
 						for kv in &parts[3..] {
 							if let Some((key, value)) = kv.split_once(':') {
 								match key {
 									"language" => {
-										let new_language = language::Language::from(value);
+										let new_language = Language::from(value);
 										if let Some(old_language) = language_override
 											&& old_language == new_language
 										{
@@ -175,27 +203,30 @@ impl Lyrics {
 											new_vocalist,
 											text
 										);
-										assert!(
-											new_vocalist.to_lowercase() != "unknown"
-												|| !CARE_ABOUT_VOCALIST,
-											"Vocalist should not be \"{}\"\nLine: \"{}\"",
-											new_vocalist,
-											the_text
-										);
-										if let Some(old_vocalist) = vocalist_override
-											&& old_vocalist == new_vocalist
-										{
-											panic!(
-												"Lyrics have redundant vocalist:{} tag\n\n{}",
-												new_vocalist, text
+										/* if new_vocalist.to_lowercase() == "unknown" {
+											crate::globals::log_2(
+												"Warning",
+												format!("Unknown vocalist for line \"{}\"", the_text),
+												crate::globals::ANSI_RED
 											);
-										}
-										vocalist_override = Some(new_vocalist);
+										} */
+										vocalists_collected_this_line.push(new_vocalist);
 									}
 									_ => panic!("Invalid lyric tag \"{}\"\n\n{}", key, text)
 								}
+							} else {
+								panic!(
+									"Lyric line has extra columns that can't be read\nLine: \"{}\"",
+									the_text
+								);
 							}
 						}
+						if !vocalists_collected_this_line.is_empty() {
+							vocalist_set_override =
+								Some(VocalistSet::from(vocalists_collected_this_line));
+						}
+
+						// use *_override to figure out language and vocalist
 						let language = if let Some(lang) = language_override {
 							last_lang = Some(lang);
 							lang
@@ -204,10 +235,10 @@ impl Lyrics {
 						} else {
 							panic!("First lyric line (\"{}\") has no language tag", line);
 						};
-						let vocalist = if let Some(v) = vocalist_override {
-							last_vocalist = Some(v.clone());
+						let vocalist_set = if let Some(v) = vocalist_set_override {
+							last_vocalist_set = Some(v.clone());
 							v
-						} else if let Some(v) = &last_vocalist {
+						} else if let Some(v) = &last_vocalist_set {
 							v.clone()
 						} else {
 							panic!("First lyric line (\"{}\") has no vocalist tag", line);
@@ -218,12 +249,36 @@ impl Lyrics {
 							start,
 							end
 						);
+						// extra validation for style because i care about this
+						for (banned_sequence, ok_supersequences, suggestion) in [
+							("cause", vec!["'cause", "because"], "'cause"),
+							("in'", vec!["ain't"], "ing"),
+							("'em", vec![], "them"),
+							("'bout", vec![], "about"),
+							("'round", vec![], "round"),
+							("aingt", vec![], "ain't"),
+							("'til", vec![], "till"),
+							("c'mon", vec![], "come on")
+						] {
+							if the_text.to_lowercase().contains(banned_sequence) {
+								assert!(
+									ok_supersequences.iter().any(|ok_supersequence| the_text
+										.to_lowercase()
+										.contains(ok_supersequence)),
+									"Lyric line contains the banned sequence \"{}\"; prefer \"{}\"\n{}\n\n{}",
+									banned_sequence,
+									suggestion,
+									the_text,
+									text
+								);
+							}
+						}
 						Some(LyricLine {
 							start,
 							end,
 							text: the_text,
 							language,
-							vocalist
+							vocalist_set
 						})
 					})
 					.collect()
@@ -292,7 +347,7 @@ impl Lyrics {
 				.collect::<Vec<_>>()
 				.join("\n\n"),
 			TextCodec::Srt => {
-				fn format_time(time: f32) -> String {
+				fn format_time(time: f64) -> String {
 					let ms = (time * 1000.0).round() as u64;
 					format!(
 						"{:02}:{:02}:{:02},{:03}",
@@ -304,6 +359,37 @@ impl Lyrics {
 				}
 				let lines: Vec<&LyricLine> = self.stanzas.iter().flatten().collect();
 
+				fn split_line_if_needed(original: &str) -> String {
+					if original.len() <= MAX_LINE_LENGTH_FOR_SRT {
+						return original.to_string();
+					}
+					let len = original.len();
+					let mid = len / 2;
+					let mut best_split: Option<usize> = None;
+					let mut best_dist = usize::MAX;
+					for (byte_idx, ch) in original.char_indices() {
+						if ch.is_whitespace() {
+							let dist = byte_idx.abs_diff(mid);
+							if dist < best_dist {
+								best_dist = dist;
+								best_split = Some(byte_idx);
+							}
+						}
+					}
+					let split_idx = if let Some(idx) = best_split {
+						idx
+					} else {
+						let mut idx = mid;
+						while idx > 0 && !original.is_char_boundary(idx) {
+							idx -= 1;
+						}
+						idx
+					};
+
+					let (left, right) = original.split_at(split_idx);
+					format!("{}\n{}", left.trim_end(), right.trim_start())
+				}
+
 				let mut out = Vec::new();
 				let mut counter = 1;
 				for index in 0..lines.len() {
@@ -312,7 +398,7 @@ impl Lyrics {
 					if let Some(next) = lines.get(index + 1)
 						&& next.start > line.start
 						&& next.start - end < LYRIC_FILL_FORWARDS_MARGIN_SECONDS
-					// if this one ends within 1.0s of the next starting, just join them together
+					// if this one ends within LYRIC_FILL_FORWARDS_MARGIN_SECONDS s of the next starting, just join them together
 					{
 						end = next.start;
 					}
@@ -321,14 +407,14 @@ impl Lyrics {
 						counter,
 						format_time(line.start),
 						format_time(end),
-						line.text
+						split_line_if_needed(&line.text)
 					));
 					counter += 1;
 				}
 				out.join("\n")
 			}
 			TextCodec::Vtt => {
-				fn format_time(time: f32) -> String {
+				fn format_time(time: f64) -> String {
 					let ms = (time * 1000.0).round() as u64;
 					format!(
 						"{:02}:{:02}:{:02}.{:03}",
@@ -348,7 +434,7 @@ impl Lyrics {
 					if let Some(next) = lines.get(index + 1)
 						&& next.start > line.start
 						&& next.start - end < LYRIC_FILL_FORWARDS_MARGIN_SECONDS
-					// if this one ends within 1.0s of the next starting, just join them together
+					// if this one ends within LYRIC_FILL_FORWARDS_MARGIN_SECONDS s of the next starting, just join them together
 					{
 						end = next.start;
 					}
@@ -357,7 +443,7 @@ impl Lyrics {
 						// counter,
 						format_time(line.start),
 						format_time(end),
-						line.vocalist,
+						line.vocalist_set,
 						line.text
 					));
 					// counter += 1;
@@ -376,7 +462,7 @@ impl Lyrics {
 							line.start,
 							line.end,
 							line.language.iso_639_1(),
-							line.vocalist,
+							line.vocalist_set,
 							line.text
 						));
 					}
@@ -398,8 +484,8 @@ impl Lyrics {
 		}
 		synced_content
 	}
-	pub fn most_common_language(&self) -> language::Language {
-		let mut counts: std::collections::HashMap<language::Language, usize> =
+	pub fn most_common_language(&self) -> Language {
+		let mut counts: std::collections::HashMap<Language, usize> =
 			std::collections::HashMap::new();
 		for group in &self.stanzas {
 			for line in group {
@@ -413,15 +499,63 @@ impl Lyrics {
 			.map(|(lang, _)| lang)
 			.expect("Could not find most common language for lyrics without lyrics")
 	}
+	pub fn lyric_page_xml(&self) -> XmlNode {
+		let primary_language = self.most_common_language();
+		let mut l_a = XmlNode::new("l-a").with_attribute("lang", primary_language.iso_639_1());
+		// let mut last_stanza_end = None;
+		let mut last_vocalist_set = &VocalistSet::empty();
+		for (stanza_index, stanza) in self.stanzas.iter().enumerate() {
+			if stanza_index > 0 {
+				l_a.add_child(XmlNode::new("br"));
+			}
+			let mut l_s = XmlNode::new("l-s");
+			for line in stanza {
+				if line.vocalist_set != *last_vocalist_set {
+					last_vocalist_set = &line.vocalist_set;
+					for (index, one_vocalist) in last_vocalist_set.list.iter().enumerate() {
+						l_s.add_child(
+							XmlNode::new("l-v")
+								.with_text(smartquotes::smart_quotes(&one_vocalist.to_string()))
+								.maybe_with_attribute(
+									"class",
+									if index < last_vocalist_set.list.len() - 1 {
+										Some("notlast")
+									} else {
+										None
+									}
+								)
+						);
+					}
+				}
+				l_s.add_child(
+					XmlNode::new("l-l")
+						.with_text(smartquotes::smart_quotes(&line.text))
+						.maybe_with_attribute(
+							"lang",
+							if line.language == primary_language {
+								None
+							} else {
+								Some(line.language.iso_639_1())
+							}
+						)
+						.with_attribute("data-start", format!("{:.6}", line.start))
+						.with_attribute("data-end", format!("{:.6}", line.end))
+				)
+			}
+			l_a.add_child(l_s);
+			// last_stanza_end = Some(stanza.last().expect("Empty stanza? Yeah right").end);
+		}
+		l_a
+	}
 }
 
 #[derive(Debug)]
 struct LyricLine {
-	start: f32,
-	end: f32,
+	start: f64,
+	end: f64,
 	text: String,
-	language: language::Language,
-	vocalist: String // see constant CARE_ABOUT_VOCALIST: bool
+	language: Language,
+	vocalist_set: VocalistSet
 }
 impl LyricLine {
 	fn start_ms(&self) -> u32 {
@@ -447,3 +581,31 @@ impl LyricLine {
 		)
 	}
 }
+
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct VocalistSet {
+	list: std::rc::Rc<Vec<String>>
+}
+impl VocalistSet {
+	fn from(mut vocalists: Vec<String>) -> Self {
+		vocalists.sort();
+		Self {
+			list: vocalists.into()
+		}
+	}
+	fn empty() -> Self {
+		Self {
+			list: Vec::new().into()
+		}
+	}
+}
+impl std::fmt::Display for VocalistSet {
+	fn fmt(&self, fmt: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		write!(fmt, "{}", self.list.join(", "))
+	}
+}
+/* impl PartialEq for VocalistSet {
+	fn eq(&self, other: &Self) -> bool {
+		std::rc::Rc::ptr_eq(&self.list, &other.list)
+	}
+} */

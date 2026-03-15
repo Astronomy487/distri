@@ -37,3 +37,12 @@ pub fn smart_quotes(text: &str) -> String {
 	}
 	new_text
 }
+
+pub fn contains_smart_quotes(text: &str) -> bool {
+	for character in text.chars() {
+		if matches!(character, '‘' | '’' | '“' | '”') {
+			return true;
+		}
+	}
+	false
+}

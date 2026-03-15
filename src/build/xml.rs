@@ -1,49 +1,29 @@
 pub struct XmlNode {
 	tag: &'static str,
 	attributes: Vec<(&'static str, String)>,
-	content: XmlNodeContent
+	children: Vec<XmlNodeChild>
 }
-pub enum XmlNodeContent {
-	Children(Vec<XmlNode>),
-	Text(String),
-	None
+enum XmlNodeChild {
+	TextNode(String),
+	XmlNode(XmlNode)
 }
+
 impl XmlNode {
 	pub fn new(tag: &'static str) -> XmlNode {
 		XmlNode {
 			tag,
 			attributes: Vec::new(),
-			content: XmlNodeContent::None
+			children: Vec::new()
 		}
 	}
 	pub fn add_attribute(&mut self, att: &'static str, val: impl Into<String>) {
 		self.attributes.push((att, val.into()));
 	}
 	pub fn add_child(&mut self, child: XmlNode) {
-		match &mut self.content {
-			XmlNodeContent::Children(children) => {
-				children.push(child);
-			}
-			XmlNodeContent::Text(_) => {
-				panic!("Cannot put child on XML node that contains text");
-			} //sdfsdf
-			XmlNodeContent::None => {
-				self.content = XmlNodeContent::Children(vec![child]);
-			}
-		}
+		self.children.push(XmlNodeChild::XmlNode(child));
 	}
 	pub fn add_text_unescaped(&mut self, text: impl Into<String>) {
-		match &self.content {
-			XmlNodeContent::Children(_) => {
-				panic!("Cannot put text on XML node that already has children");
-			}
-			XmlNodeContent::None => {
-				self.content = XmlNodeContent::Text(text.into());
-			}
-			XmlNodeContent::Text(_) => {
-				panic!("Cannot put text on XML node that already has text");
-			}
-		}
+		self.children.push(XmlNodeChild::TextNode(text.into()));
 	}
 	pub fn add_text(&mut self, text: impl Into<String>) {
 		self.add_text_unescaped(escape(text.into()))
@@ -89,20 +69,49 @@ impl std::fmt::Display for XmlNode {
 				write!(fmt, " {}=\"{}\"", att, val)?;
 			}
 		}
-		match &self.content {
-			XmlNodeContent::None => {
-				write!(fmt, "/>")
-			}
-			XmlNodeContent::Text(text) => {
-				write!(fmt, ">{}</{}>", text, self.tag)
-			}
-			XmlNodeContent::Children(children) => {
-				write!(fmt, ">")?;
-				for child in children {
-					write!(fmt, "{}", child)?;
+		if self.children.is_empty() {
+			write!(fmt, "/>")
+		} else {
+			write!(fmt, ">")?;
+			for child in &self.children {
+				match child {
+					XmlNodeChild::TextNode(text) => {
+						write!(fmt, "{}", text)?;
+					}
+					XmlNodeChild::XmlNode(xml_node) => {
+						write!(fmt, "{}", xml_node)?;
+					}
 				}
-				write!(fmt, "</{}>", self.tag)
 			}
+			write!(fmt, "</{}>", self.tag)
+		}
+	}
+}
+impl std::fmt::Debug for XmlNode {
+	fn fmt(&self, fmt: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		write!(fmt, "<{}", self.tag)?;
+		for (att, val) in &self.attributes {
+			if val.is_empty() {
+				write!(fmt, " {}", att)?;
+			} else {
+				write!(fmt, " {}=\"{}\"", att, val)?;
+			}
+		}
+		if self.children.is_empty() {
+			write!(fmt, "/>")
+		} else {
+			write!(fmt, ">")?;
+			for child in &self.children {
+				match child {
+					XmlNodeChild::TextNode(text) => {
+						write!(fmt, "{}", text)?;
+					}
+					XmlNodeChild::XmlNode(xml_node) => {
+						write!(fmt, "{}", xml_node)?;
+					}
+				}
+			}
+			write!(fmt, "</{}>", self.tag)
 		}
 	}
 }
